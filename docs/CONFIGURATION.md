@@ -1,0 +1,383 @@
+# Configuration — shapeguard
+
+> Every config option. Global vs scoped. Defaults. Override patterns.
+
+---
+
+## Table of contents
+
+- [Global vs scoped](#global-vs-scoped)
+- [shapeguard() config reference](#shapeguard-config)
+- [validate() config reference](#validate-config)
+- [errorHandler() config](#errorhandler-config)
+- [notFoundHandler() config](#notfound-config)
+- [createRouter() config](#router-config)
+- [Quick reference table](#reference)
+
+---
+
+## Global vs scoped <a name="global-vs-scoped"></a>
+
+```
+GLOBAL — set once in shapeguard(), applies everywhere
+  logger behaviour (level, pretty, body logging, redaction)
+  validation limits and error exposure
+  response shape and status codes
+  error fallback message and hooks
+
+SCOPED — set per-route in validate() or withShape()
+  which schemas to validate on this route
+  per-route limit overrides (larger/smaller than global)
+  per-route sanitize config
+  response shape for this route only
+```
+
+```ts
+// GLOBAL — in app.ts
+app.use(shapeguard({
+  logger:     { level: 'warn', slowThreshold: 1000 },
+  validation: { exposeEnumValues: false },
+  response:   { includeRequestId: true },
+  errors:     { fallbackMessage: 'Something went wrong' },
+}))
+
+// SCOPED — per route
+validate({ body: CreateUserBodySchema, limits: { maxStringLength: 500 } })
+```
+
+---
+
+## shapeguard() config reference <a name="shapeguard-config"></a>
+
+```ts
+app.use(shapeguard({
+
+  // ── debug mode ─────────────────────────────────────────────────
+  // Controls error detail exposure and log verbosity.
+  // Default: auto-detected from NODE_ENV
+  //   NODE_ENV !== 'production' → debug: true
+  //   NODE_ENV === 'production'  → debug: false
+  debug: false,
+
+  // ── request ID ─────────────────────────────────────────────────
+  // Controls how req.id is generated and where it comes from.
+  requestId: {
+    // Generate a unique ID for every request (default: true).
+    // Set false to disable — req.id will be '' and [req_id] won't appear in logs.
+    enabled: true,
+
+    // Header to read the request ID from BEFORE generating one.
+    // Use this when a load balancer / API gateway already set a trace ID
+    // so the same ID flows through all your services.
+    // Default: 'x-request-id'. Also common: 'x-trace-id', 'x-correlation-id'.
+    // Falls back to generating a fresh ID if the header is absent.
+    header: 'x-request-id',
+
+    // Custom ID generator — replaces the built-in req_<timestamp><random> format.
+    // Must return a non-empty string. Called once per request.
+    // generator: () => `trace-${crypto.randomUUID()}`,
+  },
+
+  // ── logger ─────────────────────────────────────────────────────
+  logger: {
+
+    // Bring your own — any { info, warn, error, debug } interface.
+    // pino, winston, console all work.
+    // When provided, all other logger options are ignored.
+    instance: yourLoggerInstance,
+
+    // Log level. Default: 'debug' dev / 'warn' prod.
+    level: 'warn',                   // 'debug' | 'info' | 'warn' | 'error'
+
+    // Pretty-print (pino-pretty). Default: true dev / false prod.
+    pretty: false,
+
+    // Log every request including successful 2xx.
+    // Default: true dev / false prod
+    // false = only errors (4xx/5xx) and slow requests are logged
+    logAllRequests: false,
+
+    // Show [req_id] on every log line.
+    // Default: true — set false to hide request ID from log output.
+    // (separate from response.includeRequestId which controls the HTTP header)
+    logRequestId: true,
+
+    // Flag requests slower than this many milliseconds.
+    // 0 = disabled entirely.
+    // Default: 0 dev / 1000 prod
+    slowThreshold: 1000,
+
+    // Include req.body in the request log entry.
+    // Sensitive keys (password, token, secret etc) always redacted.
+    // Default: false — bodies often contain PII, enable with care
+    logRequestBody: false,
+
+    // Include the response JSON body in the log entry.
+    // Default: false — may contain PII or large payloads
+    logResponseBody: false,
+
+    // Additional field paths to redact from logs.
+    // Appended to built-in list — never replaces it.
+    // Always-redacted: password, passwordHash, token, secret, accessToken,
+    //                  refreshToken, apiKey, cardNumber, cvv, ssn,
+    //                  req.headers.authorization, req.headers.cookie
+    redact: [
+      'req.body.dateOfBirth',
+      'req.body.nationalId',
+    ],
+  },
+
+  // ── validation ─────────────────────────────────────────────────
+  validation: {
+
+    // Show the field name in validation errors.
+    // Default: true always (field names are client input — safe to show)
+    exposeFieldName: true,
+
+    // Show the human-readable error message.
+    // Default: true always
+    exposeMessage: true,
+
+    // Show enum option values in errors like "Expected 'admin' | 'user'".
+    // Default: false prod / true dev (enum values can reveal your data model)
+    exposeEnumValues: false,
+
+    // Show raw Zod error codes like 'invalid_type', 'too_small'.
+    // Default: false always (reveals internal schema library)
+    exposeZodCodes: false,
+
+    // Pre-parse limits — apply before any schema runs.
+    // These protect against DoS and proto pollution.
+    limits: {
+      maxDepth:        20,           // object nesting levels
+      maxArrayLength:  1000,         // items in any array
+      maxStringLength: 10_000,       // characters in any string field
+    },
+  },
+
+  // ── response ───────────────────────────────────────────────────
+  response: {
+
+    // Rename envelope fields globally.
+    // Available tokens: {success}, {data}, {message}
+    shape: {
+      status:  '{success}',          // success → status
+      result:  '{data}',             // data    → result
+      msg:     '{message}',          // message → msg
+    },
+
+    // Override default HTTP status code per method.
+    statusCodes: {
+      POST:   201,                   // default
+      GET:    200,                   // default
+      PUT:    200,                   // default
+      PATCH:  200,                   // default
+      DELETE: 200,                   // default
+    },
+
+    // Add X-Request-Id header to every response.
+    // Useful for client-side error reporting.
+    // Default: false
+    includeRequestId: false,
+  },
+
+  // ── errors ─────────────────────────────────────────────────────
+  errors: {
+
+    // Message shown to clients for programmer errors (5xx non-AppError) in prod.
+    // Default: 'Something went wrong'
+    fallbackMessage: 'Something went wrong',
+
+    // Hook called after every error, before response is sent.
+    // Use for Sentry, Datadog, PagerDuty, alerting.
+    // Never throws — if the hook throws, it is silently ignored.
+    onError: (err: AppError, req: Request) => {
+      Sentry.captureException(err, {
+        extra: { requestId: req.id, path: req.path }
+      })
+    },
+  },
+
+}))
+```
+
+---
+
+## validate() config reference <a name="validate-config"></a>
+
+Scoped to one route. Never affects other routes.
+
+```ts
+// full route bundle from defineRoute()
+validate(CreateUserRoute)
+
+// individual schemas
+validate({
+  body:    CreateUserBodySchema,
+  params:  UserParamsSchema,
+  query:   UserQuerySchema,
+  headers: UserHeadersSchema,
+  sends:   UserResponseSchema,   // strips response fields
+})
+
+// return all validation errors in one part, not just the first
+validate({
+  body:      CreateUserBodySchema,
+  allErrors: true,
+})
+
+// override pre-parse limits for this route only
+validate({
+  body:   FileUploadSchema,
+  limits: { maxStringLength: 500_000 },   // larger for file routes
+})
+
+// override validation error exposure for this route
+validate({
+  body:     LoginSchema,
+  sanitize: { exposeEnumValues: false },  // hide enum values on this route
+})
+```
+
+### validate() options
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `body` | `ZodSchema \| SchemaAdapter` | — | Validate + type `req.body` |
+| `params` | `ZodSchema \| SchemaAdapter` | — | Validate + type `req.params` |
+| `query` | `ZodSchema \| SchemaAdapter` | — | Validate + type `req.query` |
+| `headers` | `ZodSchema \| SchemaAdapter` | — | Validate headers |
+| `sends` / `response` | `ZodSchema \| SchemaAdapter` | — | Strip response fields |
+| `allErrors` | `boolean` | `false` | Return all errors in one part |
+| `limits.maxDepth` | `number` | global (20) | Per-route nesting limit |
+| `limits.maxArrayLength` | `number` | global (1000) | Per-route array limit |
+| `limits.maxStringLength` | `number` | global (10000) | Per-route string limit |
+| `sanitize.exposeFieldName` | `boolean` | global (true) | Show field in error |
+| `sanitize.exposeMessage` | `boolean` | global (true) | Show message in error |
+| `sanitize.exposeEnumValues` | `boolean` | global | Show enum options |
+| `sanitize.exposeZodCodes` | `boolean` | global (false) | Show Zod codes |
+
+---
+
+## errorHandler() config <a name="errorhandler-config"></a>
+
+```ts
+app.use(errorHandler({
+  // message for programmer errors in prod
+  fallbackMessage: 'Something went wrong',
+
+  // hook fires after every error, before response sent
+  onError: (err: AppError, req: Request) => {
+    if (err.statusCode >= 500) alertingService.critical(err)
+  },
+}))
+```
+
+> **Note:** `errorHandler()` has its own config separate from `shapeguard()`.
+> The `errors:` block in `shapeguard({ errors: {...} })` configures shapeguard's
+> internal middleware. You still pass separate config to `errorHandler()`.
+
+---
+
+## notFoundHandler() config <a name="notfound-config"></a>
+
+```ts
+// basic — message includes method + path
+app.use(notFoundHandler())
+// "Cannot GET /api/unknown"
+
+// custom fixed message
+app.use(notFoundHandler({ message: 'Route not found' }))
+```
+
+---
+
+## createRouter() config <a name="router-config"></a>
+
+Drop-in for `express.Router()`. Accepts all Express router options.
+
+```ts
+const router = createRouter()
+const router = createRouter({ strict: false, mergeParams: true })
+```
+
+Automatically returns 405 with `Allow` header for registered paths used
+with wrong HTTP method. Works with parameterized routes like `/:id`.
+
+---
+
+## Quick reference table <a name="reference"></a>
+
+### shapeguard() — requestId options
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `requestId.enabled` | `boolean` | `true` | Generate request IDs |
+| `requestId.header` | `string` | `'x-request-id'` | Upstream header to read first |
+| `requestId.generator` | `() => string` | built-in | Custom ID generator |
+
+### shapeguard() — logger options
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `logger.instance` | `Logger` | built-in | Custom logger |
+| `logger.level` | `string` | `'debug'` dev / `'warn'` prod | Log level |
+| `logger.pretty` | `boolean` | `true` dev / `false` prod | pino-pretty format |
+| `logger.logAllRequests` | `boolean` | `true` dev / `false` prod | Log every 2xx |
+| `logger.logRequestId` | `boolean` | `true` | Show [req_id] in log lines |
+| `logger.slowThreshold` | `number` | `0` dev / `1000` prod | Slow warn ms (0=off) |
+| `logger.logRequestBody` | `boolean` | `false` | Log req.body (redacted) |
+| `logger.logResponseBody` | `boolean` | `false` | Log response JSON (redacted) |
+| `logger.redact` | `string[]` | `[]` | Extra redact paths |
+
+### shapeguard() — validation options
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `validation.exposeFieldName` | `boolean` | `true` | Field name in errors |
+| `validation.exposeMessage` | `boolean` | `true` | Message in errors |
+| `validation.exposeEnumValues` | `boolean` | `false` prod | Enum values in errors |
+| `validation.exposeZodCodes` | `boolean` | `false` | Zod codes in errors |
+| `validation.limits.maxDepth` | `number` | `20` | Max nesting depth |
+| `validation.limits.maxArrayLength` | `number` | `1000` | Max array size |
+| `validation.limits.maxStringLength` | `number` | `10000` | Max string chars |
+
+### shapeguard() — response options
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `response.shape` | `object` | default envelope | Rename envelope fields |
+| `response.statusCodes` | `object` | `{POST:201,*:200}` | Status per method |
+| `response.includeRequestId` | `boolean` | `false` | X-Request-Id header |
+
+### shapeguard() — errors options
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `errors.fallbackMessage` | `string` | `'Something went wrong'` | 5xx message in prod |
+| `errors.onError` | `function` | — | Hook for Sentry / alerting |
+
+### AppError factories
+
+| Factory | Status | Code |
+|---------|--------|------|
+| `AppError.notFound(resource?)` | 404 | `NOT_FOUND` |
+| `AppError.unauthorized(msg?)` | 401 | `UNAUTHORIZED` |
+| `AppError.forbidden(msg?)` | 403 | `FORBIDDEN` |
+| `AppError.conflict(resource?)` | 409 | `CONFLICT` |
+| `AppError.validation(issues)` | 422 | `VALIDATION_ERROR` |
+| `AppError.internal(msg?)` | 500 | `INTERNAL_ERROR` |
+| `AppError.custom(code,msg,status,details?)` | any | any |
+| `AppError.fromUnknown(err)` | varies | varies |
+| `AppError.fromLegacy({code,message,statusCode})` | any | any |
+
+### res helpers
+
+| Helper | Status | Notes |
+|--------|--------|-------|
+| `res.ok(opts)` | 200 (configurable) | General success |
+| `res.created(opts)` | 201 (always) | POST created |
+| `res.accepted(opts)` | 202 (always) | Async job accepted |
+| `res.noContent()` | 204 (always) | No body |
+| `res.paginated(opts)` | 200 | List with pagination metadata |
+| `res.fail(opts)` | 400 (configurable) | Inline error response |
