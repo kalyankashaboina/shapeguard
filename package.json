@@ -2,9 +2,17 @@
   "name": "shapeguard",
   "version": "0.1.0",
   "description": "FastAPI-style validation, response shaping, and error handling for Node.js + Express",
-  "author": "Kalyan",
+  "author": "Kalyan Kashaboina <kalyankashaboina@gmail.com> (https://github.com/kalyankashaboina)",
   "license": "MIT",
   "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/kalyankashaboina/shapeguard-.git"
+  },
+  "homepage": "https://www.npmjs.com/package/shapeguard",
+  "bugs": {
+    "url": "https://github.com/kalyankashaboina/shapeguard-/issues"
+  },
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
@@ -39,7 +47,7 @@
     "lint": "eslint src --ext .ts",
     "typecheck": "tsc --noEmit",
     "size": "npm run build && du -sh dist/* | sort -h",
-    "prepublishOnly": "echo \"dist already built — skipping auto-build for initial publish\""
+    "prepublishOnly": "npm run build && npm test"
   },
   "dependencies": {},
   "peerDependencies": {
@@ -92,7 +100,11 @@
     "typescript",
     "nodejs",
     "response",
-    "shapeguard"
+    "shapeguard",
+    "logging",
+    "security",
+    "pino",
+    "api"
   ],
   "engines": {
     "node": ">=18.0.0"

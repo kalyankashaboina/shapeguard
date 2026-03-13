@@ -8,10 +8,14 @@ Strict by default. Lightweight. Production-ready.
 [![npm](https://img.shields.io/npm/v/shapeguard)](https://npmjs.com/package/shapeguard)
 [![bundle size](https://img.shields.io/bundlephobia/minzip/shapeguard)](https://bundlephobia.com/package/shapeguard)
 [![license](https://img.shields.io/npm/l/shapeguard)](./LICENSE)
+[![node](https://img.shields.io/node/v/shapeguard)](https://npmjs.com/package/shapeguard)
+[![CI](https://github.com/kalyankashaboina/shapeguard-/actions/workflows/ci.yml/badge.svg)](https://github.com/kalyankashaboina/shapeguard-/actions/workflows/ci.yml)
 
 ---
 
 ## Why shapeguard
+
+![shapeguard vs manual setup](./assets/shapeguard-comparison.svg)
 
 Every Node.js + Express app repeats the same setup:
 
@@ -379,4 +383,4 @@ total             ~20kb gzip
 
 ## License
 
-MIT — Kalyan
+MIT © 2026  [Kalyan Kashaboina](https://github.com/kalyankashaboina)
