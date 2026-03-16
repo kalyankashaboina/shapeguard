@@ -241,6 +241,8 @@ errorHandler() mounted
 
 ## Response shapes — always consistent
 
+![Response shapes](./assets/shapeguard-response-shapes.svg)
+
 ```ts
 // SUCCESS
 { "success": true,  "message": "User created", "data": { ... } }
@@ -261,6 +263,8 @@ if (!success) handleError(error.code, error.message)
 ---
 
 ## Logging
+
+![Logging output](./assets/shapeguard-logging.svg)
 
 ```
 # Development — human readable, color-coded level badges, one line per request
@@ -395,6 +399,8 @@ import { yupAdapter } from 'shapeguard/adapters/yup'
 ---
 
 ## Security defaults
+
+![Security defaults](./assets/shapeguard-security.svg)
 
 | Threat | Default | Configurable |
 |--------|---------|--------------|
