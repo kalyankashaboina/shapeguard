@@ -1,0 +1,115 @@
+{
+  "name": "shapeguard",
+  "version": "0.3.0",
+  "description": "FastAPI-style validation, response shaping, and error handling for Node.js + Express",
+  "author": "Kalyan Kashaboina <kalyankashaboina07@gmail.com> (https://github.com/kalyankashaboina)",
+  "license": "MIT",
+  "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kalyankashaboina/shapeguard.git"
+  },
+  "homepage": "https://www.npmjs.com/package/shapeguard",
+  "bugs": {
+    "url": "https://github.com/kalyankashaboina/shapeguard/issues"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs"
+    },
+    "./adapters/joi": {
+      "types": "./dist/adapters/joi.d.ts",
+      "import": "./dist/adapters/joi.mjs"
+    },
+    "./adapters/yup": {
+      "types": "./dist/adapters/yup.d.ts",
+      "import": "./dist/adapters/yup.mjs"
+    },
+    "./testing": {
+      "types": "./dist/testing/index.d.ts",
+      "import": "./dist/testing/index.mjs"
+    }
+  },
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist",
+    "README.md",
+    "CHANGELOG.md",
+    "MIGRATION.md",
+    "LICENSE",
+    "docs"
+  ],
+  "sideEffects": false,
+  "scripts": {
+    "build": "tsup",
+    "build:watch": "tsup --watch",
+    "build:analyze": "tsup --metafile && npx esbuild-visualizer --metadata dist/metafile-esm.json",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "lint": "eslint src --ext .ts",
+    "typecheck": "tsc --noEmit",
+    "size": "npm run build && node scripts/size.mjs",
+    "prepublishOnly": "npm run build && npm test"
+  },
+  "dependencies": {},
+  "peerDependencies": {
+    "express": ">=4.0.0",
+    "zod": ">=3.0.0"
+  },
+  "peerDependenciesMeta": {
+    "express": {
+      "optional": false
+    },
+    "zod": {
+      "optional": false
+    },
+    "pino": {
+      "optional": true
+    },
+    "pino-pretty": {
+      "optional": true
+    }
+  },
+  "optionalDependencies": {
+    "pino": ">=8.0.0",
+    "pino-pretty": ">=11.0.0",
+    "joi": ">=17.0.0",
+    "yup": ">=1.0.0"
+  },
+  "devDependencies": {
+    "@types/express": "^4.17.21",
+    "@types/node": "^20.0.0",
+    "@types/supertest": "^6.0.2",
+    "express": "^4.18.3",
+    "pino": "^8.19.0",
+    "pino-pretty": "^11.0.0",
+    "supertest": "^7.0.0",
+    "tsup": "^8.0.2",
+    "typescript": "^5.4.0",
+    "vitest": "^1.4.0",
+    "zod": "^3.22.4",
+    "@vitest/coverage-v8": "^1.4.0"
+  },
+  "keywords": [
+    "express",
+    "validation",
+    "middleware",
+    "zod",
+    "error-handling",
+    "fastapi",
+    "typescript",
+    "nodejs",
+    "response",
+    "shapeguard",
+    "logging",
+    "security",
+    "pino",
+    "api"
+  ],
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
