@@ -1,0 +1,143 @@
+<!-- Keep a Changelog — https://keepachangelog.com/en/1.0.0/ -->
+<!-- Semantic Versioning — https://semver.org/spec/v2.0.0.html -->
+
+# Changelog
+
+All notable changes to shapeguard are documented here.
+Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
+Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+---
+
+## [Unreleased] — v0.3.0 planned
+
+> Work planned for v0.3.0. Not yet in any release.
+> This section will be renamed to `[0.3.0]` when shipped.
+
+### Added (planned)
+
+- `generateOpenAPI()` — auto-generate an OpenAPI 3.1 spec from `defineRoute()` definitions; no manual schema duplication
+- `shapeguard/testing` — `mockRequest()` and `mockResponse()` test helpers; unit-test controllers without spinning up Express
+- Per-route `rateLimit` option on `defineRoute()` — built-in rate limiting without a separate package
+- Per-route `cache` option on `defineRoute()` — declarative `Cache-Control` hints (`maxAge`, `private`, `noStore`)
+- `examples/with-openapi` — working example showing OpenAPI generation + Swagger UI
+- `examples/with-testing` — working example showing controller unit tests with test helpers
+- `TESTING.md` — full docs for test helpers
+- `OPENAPI.md` — full docs for OpenAPI generation
+
+---
+
+## [0.2.0] — 2026-XX-XX
+
+> **Theme: Developer experience.** Same power, significantly less code.
+> Existing v0.1.x code is fully compatible — no breaking changes.
+
+### Added
+
+- `handle(route, handler)` — combines `validate()` + `asyncHandler()` into a single function; eliminates the two-element array pattern on every route
+- `createDTO(fields)` — thin wrapper around `z.object()` that auto-infers the TypeScript input type; removes manual `z.infer<typeof ...>` on every schema definition
+- Transform hook on `defineRoute()` — optional `transform(data) => data` async function that runs after validation and before the handler; use for password hashing, field normalisation, sanitization — keeps service layer pure
+- Global string transforms config — `validation.strings.trim` and `validation.strings.lowercase` options in `shapeguard()`; apply `.trim()` / `.toLowerCase()` to all string fields without repeating per-field in every schema
+- `logger.silent: true` — suppresses all log output; designed for test environments so `npm test` output is clean
+- `examples/basic-crud-api/` — complete working Express + shapeguard app showing all v0.2.0 features end-to-end: `handle()`, `createDTO()`, transform hook, `createRouter()`, `AppError`, `res.paginated()`
+- `MIGRATION.md` — upgrade guide from v0.1.x to v0.2.0
+
+### Changed
+
+- Joi and Yup adapters now documented with full usage examples in `README.md` and `docs/VALIDATION.md`; previously only mentioned in the types export
+- `res.paginated()` now documented with a full example in `README.md`; previously only existed as a type (`PaginatedData`) with no visible usage example
+- `docs/VALIDATION.md` — new sections for `handle()`, `createDTO()`, transform hook, global string transforms, and params/query/headers examples promoted to Quick Start level
+- `docs/CONFIGURATION.md` — new `validation.strings` section documenting global string transform config
+
+---
+
+## [0.1.0] — 2026-03-13 — Initial public release
+
+### Core middleware
+
+- `shapeguard()` — main middleware factory, mount once in `app.ts`
+- Auto-detects `NODE_ENV` — no manual `debug` flag needed
+- `requestId` config block — full control over request ID generation:
+  - `enabled` — disable entirely (default: `true`)
+  - `header` — read trace ID from upstream first, e.g. load balancer's `x-request-id` (default: `'x-request-id'`)
+  - `generator` — custom ID function, e.g. `() => crypto.randomUUID()`
+
+### Validation
+
+- `validate()` — validates `req.body`, `req.params`, `req.query`, `req.headers`
+- `validate({ allErrors: true })` — collect all field issues in one response
+- `validate({ limits })` — per-route pre-parse limit overrides
+- `validate({ sanitize })` — per-route error exposure config
+- `defineRoute()` — bundle all schemas into one reusable definition
+- Auto-wraps raw Zod schemas — no manual `zodAdapter()` call needed
+- `zodAdapter()`, `joiAdapter()`, `yupAdapter()` — explicit adapters
+- `isZodSchema()` — detect zod schemas at runtime
+
+### Type inference
+
+- `InferBody<T>`, `InferParams<T>`, `InferQuery<T>`, `InferHeaders<T>` — infer types from `defineRoute()` output
+
+### Pre-parse guards (always on, before schema)
+
+- Proto pollution blocking — `__proto__`, `constructor`, `prototype` stripped
+- Unicode sanitization — null bytes (`\u0000`), zero-width chars (`\u200B`), RTL override (`\u202E`) removed
+- Object depth limit — default 20 levels, configurable
+- Array length limit — default 1000 items, configurable
+- String length limit — default 10,000 chars, configurable
+- Content-Type enforcement — POST/PUT/PATCH with a body requires valid Content-Type
+
+### Errors
+
+- `AppError` — single error class with `isOperational` flag (operational vs programmer errors)
+- `AppError.notFound()`, `.unauthorized()`, `.forbidden()`, `.conflict()`, `.validation()`, `.internal()`, `.custom()`, `.fromLegacy()`
+- `isAppError()` — type guard, works across module boundaries
+- `errorHandler()` — centralised error middleware, always mount last
+- `notFoundHandler()` — 404 for unmatched routes
+- `asyncHandler()` — catches async errors in Express 4
+
+### Logging
+
+- FastAPI-style request logging — one clean line per event
+- `>>` = request arriving, `<<` = response leaving — pure ASCII, safe on all terminals including Windows
+- Color-coded level badges: `[DEBUG]` cyan · `[INFO]` green · `[WARN]` yellow · `[ERROR]` red
+- Colors only activate when `process.stdout.isTTY` — no escape codes in CI pipes or file redirects
+- `logRequestId` — toggle `[req_id]` on/off in log lines (default: `true`)
+- Built-in pino integration (optional peer dep — auto-detected, no crash if absent)
+- Console fallback logger with identical format and redaction when pino is not installed
+- `logRequestBody` / `logResponseBody` — include sanitized body in logs (off by default)
+- `slowThreshold` — SLOW warning on responses over N ms (default: disabled in dev, 1000ms in prod)
+- `logAllRequests` — log every request, not just errors (default: true in dev, false in prod)
+- Structured JSON payload field: `duration_ms` (self-documenting units)
+- Always-redacted: `password`, `passwordHash`, `token`, `secret`, `accessToken`, `refreshToken`, `apiKey`, `cardNumber`, `cvv`, `ssn`, `pin`, `authorization` header, `cookie` header
+- Production JSON output: one line per event — Datadog / CloudWatch / Loki ready
+
+### Response helpers
+
+- `res.ok()`, `res.created()`, `res.accepted()`, `res.noContent()`, `res.paginated()`, `res.fail()` — injected on every route
+- `withShape()` — per-route response shape override (`'raw'` or field map)
+- `response.shape` — global envelope field renaming
+- `response.statusCodes` — configurable default status per HTTP method
+- Consistent envelope: `{ success, message, data }` / `{ success, message, error }`
+
+### Router
+
+- `createRouter()` — drop-in for `express.Router()`
+- Automatic 405 Method Not Allowed with `Allow` header
+- Works correctly for parameterised routes (`/users/:id` 405s for wrong method)
+
+### Types
+
+- Full TypeScript types exported: `ShapeguardConfig`, `RequestIdConfig`, `LoggerConfig`, `ValidationConfig`, `ResponseConfig`, `ErrorsConfig`, `SchemaAdapter`, `RouteSchema`, `SuccessEnvelope`, `ErrorEnvelope`, `Envelope`, `PaginatedData`, `Logger`, `LogLevel`, `HttpMethod`, `ValidationIssue`, `SafeParseResult`
+- Express augmentation: `req.id` typed as `string`, all `res.*` helpers typed
+
+### Error codes
+
+`VALIDATION_ERROR` · `NOT_FOUND` · `UNAUTHORIZED` · `FORBIDDEN` · `CONFLICT` · `INTERNAL_ERROR` · `METHOD_NOT_ALLOWED` · `BODY_TOO_DEEP` · `BODY_ARRAY_TOO_LARGE` · `STRING_TOO_LONG` · `INVALID_CONTENT_TYPE` · `PARAM_POLLUTION` · `PROTO_POLLUTION`
+
+### Build
+
+- ESM output (`dist/index.mjs`)
+- TypeScript declarations for all exports (`dist/index.d.ts`)
+- `sideEffects: false` — fully tree-shakeable
+- Zero runtime dependencies — pino, joi, yup lazy-loaded only if installed
+- Node.js 18+

@@ -1,0 +1,430 @@
+# Response — shapeguard
+
+> res helpers, response shapes, withShape, global config, all cases.
+
+---
+
+## Table of contents
+
+- [Response contract](#contract)
+- [res helpers](#res-helpers)
+- [All response shapes](#shapes)
+- [withShape() — per-route override](#withshape)
+- [Global shape config](#global-shape)
+- [createRouter() — auto 405](#createrouter)
+- [HTTP status codes](#status-codes)
+
+---
+
+## Response contract <a name="contract"></a>
+
+shapeguard guarantees one shape for every response — success and error.
+Frontend writes one handler. Forever.
+
+```ts
+// SUCCESS — always this
+{
+  success: true,
+  message: string,
+  data:    T          // typed from your sends: schema
+}
+
+// ERROR — always this
+{
+  success: false,
+  message: string,
+  error: {
+    code:    string,      // stable — safe to match in frontend
+    message: string,      // human readable
+    details: object | null
+  }
+}
+```
+
+**Configurable** — see [Global shape config](#global-shape) if you need a different envelope.
+
+---
+
+## res helpers <a name="res-helpers"></a>
+
+Injected by `shapeguard()` on every route. No import needed in controllers.
+
+### res.ok()
+
+General success. Default 200.
+
+```ts
+res.ok({ data: user, message: 'User found' })
+// HTTP 200
+// { "success": true, "message": "User found", "data": { ... } }
+
+res.ok({ data: user })
+// message defaults to ""
+
+res.ok({ data: user, status: 202 })
+// override status code
+```
+
+### res.created()
+
+Resource created. Always 201.
+
+```ts
+res.created({ data: user, message: 'User created' })
+// HTTP 201
+// { "success": true, "message": "User created", "data": { ... } }
+```
+
+### res.accepted()
+
+Async job accepted. Always 202.
+
+```ts
+res.accepted({ data: { jobId: 'job_123' }, message: 'Export started' })
+// HTTP 202
+// { "success": true, "message": "Export started", "data": { "jobId": "job_123" } }
+```
+
+### res.noContent()
+
+No body. Always 204.
+
+```ts
+res.noContent()
+// HTTP 204
+// no body
+```
+
+### res.paginated()
+
+List response. Requires `pagination: true` in shapeguard config.
+
+```ts
+res.paginated({
+  data:  users,   // array
+  total: 45,      // total count in DB
+  page:  1,       // current page
+  limit: 20,      // items per page
+})
+// HTTP 200
+// {
+//   "success": true,
+//   "message": "",
+//   "data": {
+//     "items":  [ ... ],
+//     "total":  45,
+//     "page":   1,
+//     "limit":  20,
+//     "pages":  3      ← total pages calculated automatically
+//   }
+// }
+```
+
+### res.fail()
+
+Send an error response directly from handler (without throwing).
+Use when you want to send an error but continue execution after.
+
+```ts
+res.fail({ code: 'INVALID_COUPON', message: 'Coupon has expired' })
+// HTTP 400
+// { "success": false, "message": "Coupon has expired",
+//   "error": { "code": "INVALID_COUPON", "message": "Coupon has expired", "details": null }}
+
+res.fail({ code: 'QUOTA_EXCEEDED', message: 'Monthly limit reached', status: 429,
+  details: { resetAt: '2024-02-01T00:00:00Z' }
+})
+```
+
+> For most cases, `throw AppError.custom(...)` is cleaner than `res.fail()`.
+> Use `res.fail()` when you need to conditionally send errors inline.
+
+---
+
+## All response shapes <a name="shapes"></a>
+
+### Success — 200
+
+```json
+{
+  "success": true,
+  "message": "User found",
+  "data": {
+    "id":        "550e8400-e29b-41d4-a716-446655440000",
+    "email":     "alice@example.com",
+    "name":      "Alice",
+    "role":      "member",
+    "createdAt": "2024-01-15T10:24:31.000Z"
+  }
+}
+```
+
+### Created — 201
+
+```json
+{
+  "success": true,
+  "message": "User created",
+  "data": {
+    "id":    "550e8400-e29b-41d4-a716-446655440000",
+    "email": "alice@example.com",
+    "name":  "Alice"
+  }
+}
+```
+
+### Paginated — 200
+
+```json
+{
+  "success": true,
+  "message": "",
+  "data": {
+    "items":  [ { "id": "...", "email": "..." }, { "id": "...", "email": "..." } ],
+    "total":  45,
+    "page":   2,
+    "limit":  20,
+    "pages":  3
+  }
+}
+```
+
+### Validation error — 422
+
+```json
+{
+  "success": false,
+  "message": "Validation failed",
+  "error": {
+    "code":    "VALIDATION_ERROR",
+    "message": "Validation failed",
+    "details": { "field": "email", "message": "Invalid email address" }
+  }
+}
+```
+
+### Not found — 404
+
+```json
+{
+  "success": false,
+  "message": "User not found",
+  "error": {
+    "code":    "NOT_FOUND",
+    "message": "User not found",
+    "details": null
+  }
+}
+```
+
+### Conflict — 409
+
+```json
+{
+  "success": false,
+  "message": "Email already exists",
+  "error": {
+    "code":    "CONFLICT",
+    "message": "Email already exists",
+    "details": null
+  }
+}
+```
+
+### Method not allowed — 405
+
+```json
+{
+  "success": false,
+  "message": "Method POST is not allowed on this route",
+  "error": {
+    "code":    "METHOD_NOT_ALLOWED",
+    "message": "Method POST is not allowed on this route",
+    "details": { "allowed": ["GET", "PUT", "DELETE"] }
+  }
+}
+```
+
+Headers also include:
+```
+Allow: GET, PUT, DELETE
+```
+
+### Internal error — 500 (production)
+
+```json
+{
+  "success": false,
+  "message": "Something went wrong",
+  "error": {
+    "code":    "INTERNAL_ERROR",
+    "message": "Something went wrong",
+    "details": null
+  }
+}
+```
+
+### Internal error — 500 (development)
+
+```json
+{
+  "success": false,
+  "message": "Cannot read properties of undefined (reading 'id')",
+  "error": {
+    "code":    "INTERNAL_ERROR",
+    "message": "Cannot read properties of undefined (reading 'id')",
+    "details": "at UserService.create (src/services/user.service.ts:24:18)"
+  }
+}
+```
+
+---
+
+## withShape() — per-route override <a name="withshape"></a>
+
+Some routes need a completely different response shape.
+Health checks, metrics, webhooks, legacy endpoints.
+
+```ts
+import { withShape } from 'shapeguard'
+```
+
+### Map fields from data
+
+```ts
+router.get('/health',
+  withShape({
+    ok:      '{data.ok}',
+    uptime:  '{data.uptime}',
+    version: '{data.version}',
+  }),
+  (req, res) => {
+    res.ok({ data: { ok: true, uptime: process.uptime(), version: '1.4.2' }})
+    // → { "ok": true, "uptime": 123.4, "version": "1.4.2" }
+    // no success/message/data wrapper
+  }
+)
+```
+
+### Raw passthrough
+
+```ts
+router.get('/ping',
+  withShape('raw'),
+  (req, res) => {
+    res.ok({ data: 'pong' })
+    // → pong
+  }
+)
+```
+
+### Legacy API shape
+
+```ts
+// your legacy API returns this shape — don't break existing clients
+router.get('/metrics',
+  withShape({
+    status:   '{data.status}',
+    requests: '{data.requests}',
+    errors:   '{data.errors}',
+    ts:       '{data.timestamp}',
+  }),
+  asyncHandler(async (req, res) => {
+    res.ok({ data: await MetricsService.get() })
+    // → { "status": "healthy", "requests": 1250, "errors": 3, "ts": 1705312345 }
+  })
+)
+```
+
+### withShape does not affect other routes
+
+```ts
+// only this route uses custom shape
+router.get('/health', withShape({ ok: '{data.ok}' }), handler)
+
+// all other routes still use the default envelope
+router.get('/users', ...UserController.listUsers)   // normal shape
+router.post('/users', ...UserController.createUser) // normal shape
+```
+
+---
+
+## Global shape config <a name="global-shape"></a>
+
+Override the default envelope for your entire app.
+Useful when integrating with an existing API standard.
+
+```ts
+// rename fields globally
+app.use(shapeguard({
+  response: {
+    shape: {
+      status:  '{success}',   // success → status
+      result:  '{data}',      // data    → result
+      msg:     '{message}',   // message → msg
+    }
+  }
+}))
+
+// all responses now use this shape
+res.ok({ data: user, message: 'Created' })
+// → { "status": true, "msg": "Created", "result": { ... } }
+```
+
+> Route-level `withShape()` overrides global shape config for that route.
+
+---
+
+## createRouter() — auto 405 <a name="createrouter"></a>
+
+Drop-in replacement for `express.Router()`.
+Automatically returns 405 with `Allow` header when wrong method is used.
+
+```ts
+import { createRouter } from 'shapeguard'
+
+const router = createRouter()   // same API as express.Router()
+
+router.get('/',    ...listUsers)
+router.post('/',   ...createUser)
+// DELETE / → 405, Allow: GET, POST
+
+router.get('/:id',    ...getUser)
+router.put('/:id',    ...updateUser)
+router.delete('/:id', ...deleteUser)
+// PATCH /:id → 405, Allow: GET, PUT, DELETE
+
+export default router
+```
+
+No `router.all()` needed anywhere. shapeguard tracks registered methods per path automatically.
+
+---
+
+## HTTP status codes <a name="status-codes"></a>
+
+Default status per method — configurable:
+
+```ts
+// defaults
+POST   → 201
+GET    → 200
+PUT    → 200
+PATCH  → 200
+DELETE → 200
+
+// override globally
+app.use(shapeguard({
+  response: {
+    statusCodes: {
+      POST:   200,   // prefer 200 over 201
+      DELETE: 204,   // prefer 204 no-content on delete
+    }
+  }
+}))
+
+// override per call
+res.ok({ data: user, status: 202 })      // explicit override
+res.created({ data: user })              // always 201, ignores config
+res.noContent()                          // always 204, ignores config
+```
