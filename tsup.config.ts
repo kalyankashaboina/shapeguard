@@ -28,7 +28,7 @@ export default defineConfig({
     'pino-pretty',   // ← moved out
   ],
 
-  banner: { js: `/* shapeguard v0.2.0 — MIT */` },
+  banner: { js: `/* shapeguard v0.3.0 — MIT */` },
 
   outExtension({ format }) {
     return { js: format === 'esm' ? '.mjs' : '.cjs' }
