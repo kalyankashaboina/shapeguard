@@ -15,6 +15,8 @@
 
 ---
 
+![Testing helpers](../assets/shapeguard-testing.svg)
+
 ## Why test helpers? <a name="why"></a>
 
 Without helpers, testing a controller requires supertest + a full Express app:

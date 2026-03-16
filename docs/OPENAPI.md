@@ -15,6 +15,8 @@
 
 ---
 
+![OpenAPI flow](../assets/shapeguard-openapi.svg)
+
 ## Quick start <a name="quick-start"></a>
 
 ```ts

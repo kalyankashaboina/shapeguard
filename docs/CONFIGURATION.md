@@ -391,3 +391,105 @@ with wrong HTTP method. Works with parameterized routes like `/:id`.
 | `res.noContent()` | 204 (always) | No body |
 | `res.paginated(opts)` | 200 | List with pagination metadata |
 | `res.fail(opts)` | 400 (configurable) | Inline error response |
+
+---
+
+## Per-route rate limiting — `rateLimit` <a name="ratelimit"></a>
+
+> Available on `defineRoute()` — v0.3.0+
+
+Built-in rate limiting. No extra package needed. Applied per IP + route path by default.
+
+```ts
+defineRoute({
+  body:      CreateUserDTO,
+  rateLimit: {
+    windowMs:  60_000,  // time window in milliseconds (60s here)
+    max:       10,       // max requests per window per key
+    message:   'Too many requests — please try again later',  // optional
+
+    // ── Advanced: plug in Redis or any external store ──────────
+    // Default is in-memory (single instance). For multi-instance
+    // production apps, provide a Redis-backed store:
+    store: {
+      async get(key: string) {
+        const raw = await redis.get(key)
+        return raw ? JSON.parse(raw) : null
+      },
+      async set(key: string, value: { count: number; reset: number }) {
+        const ttl = Math.ceil((value.reset - Date.now()) / 1000)
+        await redis.set(key, JSON.stringify(value), 'EX', ttl)
+      },
+    },
+
+    // ── Advanced: custom key generator ─────────────────────────
+    // Default key is: `${req.path}:${clientIP}`
+    // Override to key by user ID, API key, tenant, etc.:
+    keyGenerator: (req) => req.user?.id ?? req.ip,
+  }
+})
+```
+
+### Rate limit error response
+
+When exceeded, shapeguard throws a 429 with `ErrorCode.RATE_LIMIT_EXCEEDED`:
+
+```json
+{
+  "success": false,
+  "message": "Too many requests — please try again later",
+  "error": {
+    "code": "RATE_LIMIT_EXCEEDED",
+    "message": "Too many requests — please try again later",
+    "details": { "retryAfter": 42 }
+  }
+}
+```
+
+### In-memory store (default)
+
+The default store is per-process. It works perfectly for:
+- Single-instance apps
+- Development and testing
+- Low-traffic endpoints
+
+For high-traffic production multi-instance deployments, provide a Redis store as shown above.
+
+---
+
+## Per-route cache hints — `cache` <a name="cache"></a>
+
+> Available on `defineRoute()` — v0.3.0+
+
+Sets `Cache-Control` response headers declaratively — no manual `res.setHeader` needed.
+
+```ts
+// Public cache — CDN and browser can cache for 60 seconds
+defineRoute({
+  params:   UserParamsSchema,
+  response: UserResponseSchema,
+  cache:    { maxAge: 60 },
+})
+// → Cache-Control: public, max-age=60
+
+// Private cache — browser only, not CDN
+defineRoute({
+  cache: { maxAge: 300, private: true },
+})
+// → Cache-Control: private, max-age=300
+
+// No store — sensitive endpoints (auth, payments)
+defineRoute({
+  cache: { maxAge: 0, noStore: true },
+})
+// → Cache-Control: no-store
+```
+
+### When to use each
+
+| Option | Use case |
+|---|---|
+| `maxAge: N` (default public) | Public data — product listings, blog posts |
+| `maxAge: N, private: true` | User-specific data — profile, settings |
+| `noStore: true` | Sensitive — auth tokens, payment pages |
+

@@ -9,7 +9,45 @@ Strict by default. Lightweight. Production-ready.
 [![bundle size](https://img.shields.io/bundlephobia/minzip/shapeguard)](https://bundlephobia.com/package/shapeguard)
 [![license](https://img.shields.io/npm/l/shapeguard)](./LICENSE)
 [![node](https://img.shields.io/node/v/shapeguard)](https://npmjs.com/package/shapeguard)
-[![CI](https://github.com/kalyankashaboina/shapeguard-/actions/workflows/ci.yml/badge.svg)](https://github.com/kalyankashaboina/shapeguard-/actions/workflows/ci.yml)
+[![CI](https://github.com/kalyankashaboina/shapeguard/actions/workflows/ci.yml/badge.svg)](https://github.com/kalyankashaboina/shapeguard/actions/workflows/ci.yml)
+
+---
+
+## What's new in v0.3.0
+
+> **OpenAPI + Swagger · Testing helpers · Rate limiting · Cache hints**
+
+```ts
+// Auto-generate OpenAPI 3.1 spec — zero duplication
+import { generateOpenAPI } from 'shapeguard'
+import swaggerUi from 'swagger-ui-express'
+
+const spec = generateOpenAPI({
+  title: 'My API', version: '1.0.0',
+  routes: {
+    'POST /users':     CreateUserRoute,   // your existing defineRoute() definitions
+    'GET  /users/:id': GetUserRoute,
+  }
+})
+app.use('/docs', swaggerUi.serve, swaggerUi.setup(spec))  // open /docs in browser
+app.get('/openapi.json', (_req, res) => res.json(spec))    // import into Postman
+
+// Unit-test controllers — no HTTP, no Express setup
+import { mockRequest, mockResponse, mockNext } from 'shapeguard/testing'
+const req = mockRequest({ body: { email: 'alice@example.com' } })
+const res = mockResponse()
+await createUser[1](req, res, mockNext())
+expect(res._result().statusCode).toBe(201)
+
+// Built-in rate limiting — no extra package
+defineRoute({
+  body:      CreateUserDTO,
+  rateLimit: { windowMs: 60_000, max: 10, store: redisStore }, // plug in Redis
+  cache:     { maxAge: 60, private: true },                     // Cache-Control header
+})
+```
+
+[→ Full v0.3.0 changelog](./CHANGELOG.md) · [→ Migration guide](./MIGRATION.md)
 
 ---
 
@@ -44,6 +82,8 @@ npm install pino pino-pretty
 If pino is not installed, shapeguard uses a built-in console logger automatically.
 
 ---
+
+![Version history](./assets/shapeguard-versions.svg)
 
 ## Peer dependencies
 
@@ -281,7 +321,10 @@ app.use(shapeguard({
 
 ```ts
 import {
-  handle,            // validate + asyncHandler in one — recommended from v0.2.0
+  // v0.3.0
+  generateOpenAPI,   // generate OpenAPI 3.1 spec from route definitions
+  // v0.2.0+
+  handle,            // validate + asyncHandler in one — recommended
   validate,          // request validation + response stripping
   asyncHandler,      // async route safety for Express 4
   AppError,          // throw errors from anywhere
@@ -380,12 +423,14 @@ total             ~20kb gzip
 
 | Doc | What's inside |
 |-----|---------------|
-| [VALIDATION.md](./docs/VALIDATION.md) | validate(), handle(), defineRoute(), createDTO(), transform hook, adapters |
+| [VALIDATION.md](./docs/VALIDATION.md) | validate(), handle(), defineRoute(), createDTO(), transform, rateLimit, cache, adapters |
+| [OPENAPI.md](./docs/OPENAPI.md) | generateOpenAPI(), Swagger UI, serving the spec — **v0.3.0** |
+| [TESTING.md](./docs/TESTING.md) | mockRequest, mockResponse, mockNext, controller unit tests — **v0.3.0** |
 | [ERRORS.md](./docs/ERRORS.md) | AppError, errorHandler, operational vs programmer |
-| [LOGGING.md](./docs/LOGGING.md) | pino, requestId, body logging, dev vs prod, config |
+| [LOGGING.md](./docs/LOGGING.md) | pino, requestId, body logging, dev vs prod, custom logger |
 | [RESPONSE.md](./docs/RESPONSE.md) | res helpers, withShape, all response shapes |
 | [CONFIGURATION.md](./docs/CONFIGURATION.md) | every config option, global vs scoped |
-| [MIGRATION.md](./MIGRATION.md) | upgrade guide — v0.1.x → v0.2.0 |
+| [MIGRATION.md](./MIGRATION.md) | upgrade guides — v0.1.x → v0.2.0 → v0.3.0 |
 | [CHANGELOG.md](./CHANGELOG.md) | version history |
 | [SETUP.md](./SETUP.md) | GitHub + npm publish steps |
 
@@ -399,6 +444,8 @@ total             ~20kb gzip
 | [handle-and-dto](./examples/handle-and-dto/) | `handle()` + `createDTO()` — less boilerplate |
 | [transform-hook](./examples/transform-hook/) | Password hashing, slug generation via `transform` |
 | [global-config](./examples/global-config/) | `validation.strings`, `logger.silent`, custom request ID |
+| [with-openapi](./examples/with-openapi/) | `generateOpenAPI()` + Swagger UI — **v0.3.0** |
+| [with-testing](./examples/with-testing/) | `mockRequest()` / `mockResponse()` unit tests — **v0.3.0** |
 
 ---
 

@@ -1,0 +1,85 @@
+<svg width="720" height="380" viewBox="0 0 720 380" xmlns="http://www.w3.org/2000/svg" font-family="'Segoe UI', system-ui, sans-serif">
+  <rect width="720" height="380" rx="14" fill="#0D1117"/>
+  <defs>
+    <marker id="a" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L0,6 L8,3 z" fill="#1A6ECC"/></marker>
+  </defs>
+
+  <!-- Title -->
+  <text x="360" y="36" text-anchor="middle" font-size="14" font-weight="700" fill="#E8F0FF">shapeguard — OpenAPI + Swagger UI</text>
+
+  <!-- Step 1: defineRoute -->
+  <rect x="30" y="58" width="190" height="240" rx="10" fill="#0A1628" stroke="#1A6ECC" stroke-width="1.5"/>
+  <rect x="30" y="58" width="190" height="28" rx="10" fill="#1A6ECC"/>
+  <rect x="30" y="72" width="190" height="14" fill="#1A6ECC"/>
+  <text x="125" y="76" text-anchor="middle" font-size="11" font-weight="700" fill="#FFF">1. defineRoute()</text>
+  <text x="44" y="104" font-size="8" fill="#4A88CC" font-family="monospace">const CreateRoute =</text>
+  <text x="44" y="118" font-size="8" fill="#4A88CC" font-family="monospace"> defineRoute({</text>
+  <text x="44" y="132" font-size="8" fill="#90C8FF" font-family="monospace">  body: CreateUserDTO,</text>
+  <text x="44" y="146" font-size="8" fill="#90C8FF" font-family="monospace">  response: UserSchema,</text>
+  <text x="44" y="160" font-size="8" fill="#90C8FF" font-family="monospace">  rateLimit: {</text>
+  <text x="44" y="174" font-size="8" fill="#90C8FF" font-family="monospace">   windowMs: 60_000,</text>
+  <text x="44" y="188" font-size="8" fill="#90C8FF" font-family="monospace">   max: 10</text>
+  <text x="44" y="202" font-size="8" fill="#90C8FF" font-family="monospace">  }</text>
+  <text x="44" y="216" font-size="8" fill="#4A88CC" font-family="monospace">})</text>
+  <text x="44" y="240" font-size="8" fill="#3A6899">// Same object used</text>
+  <text x="44" y="254" font-size="8" fill="#3A6899">// for validation AND</text>
+  <text x="44" y="268" font-size="8" fill="#3A6899">// for OpenAPI spec</text>
+  <text x="44" y="290" font-size="8" fill="#5A90C0">Zero duplication ✓</text>
+
+  <!-- Arrow 1→2 -->
+  <line x1="222" y1="178" x2="258" y2="178" stroke="#1A6ECC" stroke-width="1.5" marker-end="url(#a)"/>
+
+  <!-- Step 2: generateOpenAPI -->
+  <rect x="260" y="58" width="200" height="240" rx="10" fill="#0A1628" stroke="#1A6ECC" stroke-width="1.5"/>
+  <rect x="260" y="58" width="200" height="28" rx="10" fill="#1A4E8F"/>
+  <rect x="260" y="72" width="200" height="14" fill="#1A4E8F"/>
+  <text x="360" y="76" text-anchor="middle" font-size="11" font-weight="700" fill="#FFF">2. generateOpenAPI()</text>
+  <text x="274" y="104" font-size="8" fill="#4A88CC" font-family="monospace">const spec =</text>
+  <text x="274" y="118" font-size="8" fill="#4A88CC" font-family="monospace"> generateOpenAPI({</text>
+  <text x="274" y="132" font-size="8" fill="#90C8FF" font-family="monospace">  title: 'My API',</text>
+  <text x="274" y="146" font-size="8" fill="#90C8FF" font-family="monospace">  version: '1.0.0',</text>
+  <text x="274" y="160" font-size="8" fill="#90C8FF" font-family="monospace">  routes: {</text>
+  <text x="274" y="174" font-size="8" fill="#7AB8F0" font-family="monospace">   'POST /users':</text>
+  <text x="274" y="188" font-size="8" fill="#7AB8F0" font-family="monospace">     CreateRoute,</text>
+  <text x="274" y="202" font-size="8" fill="#7AB8F0" font-family="monospace">   'GET /users/:id':</text>
+  <text x="274" y="216" font-size="8" fill="#7AB8F0" font-family="monospace">     GetRoute,</text>
+  <text x="274" y="230" font-size="8" fill="#90C8FF" font-family="monospace">  }</text>
+  <text x="274" y="244" font-size="8" fill="#4A88CC" font-family="monospace">})</text>
+  <text x="274" y="268" font-size="8" fill="#3A6899">// Returns OpenAPI 3.1</text>
+  <text x="274" y="282" font-size="8" fill="#3A6899">// JSON spec object</text>
+
+  <!-- Arrow 2→3 -->
+  <line x1="462" y1="178" x2="498" y2="178" stroke="#1A6ECC" stroke-width="1.5" marker-end="url(#a)"/>
+
+  <!-- Step 3: serve -->
+  <rect x="500" y="58" width="200" height="240" rx="10" fill="#0A1628" stroke="#1A6ECC" stroke-width="1.5"/>
+  <rect x="500" y="58" width="200" height="28" rx="10" fill="#0F3A6A"/>
+  <rect x="500" y="72" width="200" height="14" fill="#0F3A6A"/>
+  <text x="600" y="76" text-anchor="middle" font-size="11" font-weight="700" fill="#FFF">3. Serve it</text>
+  <text x="514" y="104" font-size="8" fill="#4A88CC" font-family="monospace">// Swagger UI</text>
+  <text x="514" y="118" font-size="8" fill="#90C8FF" font-family="monospace">app.use('/docs',</text>
+  <text x="514" y="132" font-size="8" fill="#90C8FF" font-family="monospace"> swaggerUi.serve,</text>
+  <text x="514" y="146" font-size="8" fill="#90C8FF" font-family="monospace"> swaggerUi.setup(spec))</text>
+  <text x="514" y="168" font-size="8" fill="#4A88CC" font-family="monospace">// Raw JSON</text>
+  <text x="514" y="182" font-size="8" fill="#90C8FF" font-family="monospace">app.get('/openapi.json',</text>
+  <text x="514" y="196" font-size="8" fill="#90C8FF" font-family="monospace"> (_, res) =></text>
+  <text x="514" y="210" font-size="8" fill="#90C8FF" font-family="monospace">   res.json(spec))</text>
+  <text x="514" y="238" font-size="8" fill="#3A9A3A">✓ Swagger UI at /docs</text>
+  <text x="514" y="254" font-size="8" fill="#3A9A3A">✓ Postman / Insomnia</text>
+  <text x="514" y="270" font-size="8" fill="#3A9A3A">✓ Auto-updated always</text>
+
+  <!-- Bottom caption -->
+  <text x="360" y="330" text-anchor="middle" font-size="10" fill="#4A6888">Your defineRoute() definitions are your documentation — no duplication, always in sync</text>
+
+  <!-- What gets generated bullets -->
+  <rect x="30" y="312" width="660" height="44" rx="8" fill="#0A1628" stroke="#1A4E8F" stroke-width="1"/>
+  <text x="60" y="330" font-size="9" fill="#90C8FF">From body: →</text>
+  <text x="120" y="330" font-size="9" fill="#CCC">requestBody schema</text>
+  <text x="230" y="330" font-size="9" fill="#90C8FF">From params: →</text>
+  <text x="296" y="330" font-size="9" fill="#CCC">path parameters</text>
+  <text x="400" y="330" font-size="9" fill="#90C8FF">From query: →</text>
+  <text x="460" y="330" font-size="9" fill="#CCC">query parameters</text>
+  <text x="558" y="330" font-size="9" fill="#90C8FF">From response: →</text>
+  <text x="632" y="330" font-size="9" fill="#CCC">200 schema</text>
+  <text x="60" y="348" font-size="9" fill="#4A6888">Always included: 422 Validation Error · 429 Rate Limit Exceeded · 500 Internal Error</text>
+</svg>

@@ -1,0 +1,71 @@
+<svg width="760" height="340" viewBox="0 0 760 340" xmlns="http://www.w3.org/2000/svg" font-family="'Segoe UI', system-ui, sans-serif">
+  <rect width="760" height="340" rx="14" fill="#0D1117"/>
+  
+  <!-- Title -->
+  <text x="380" y="38" text-anchor="middle" font-size="15" font-weight="700" fill="#E8F5F0">shapeguard — version history</text>
+
+  <!-- v0.1.0 column -->
+  <rect x="30" y="56" width="210" height="256" rx="10" fill="#0F2820" stroke="#0F6E56" stroke-width="1.5"/>
+  <rect x="30" y="56" width="210" height="36" rx="10" fill="#0F6E56"/>
+  <rect x="30" y="78" width="210" height="14" fill="#0F6E56"/>
+  <text x="135" y="79" text-anchor="middle" font-size="13" font-weight="700" fill="#FFF">v0.1.0</text>
+  <text x="135" y="95" text-anchor="middle" font-size="10" fill="#7DF0C0">Foundation</text>
+  <text x="44" y="116" font-size="10" fill="#A8D8C8">✦ shapeguard() middleware</text>
+  <text x="44" y="133" font-size="10" fill="#A8D8C8">✦ validate() + asyncHandler()</text>
+  <text x="44" y="150" font-size="10" fill="#A8D8C8">✦ AppError + errorHandler()</text>
+  <text x="44" y="167" font-size="10" fill="#A8D8C8">✦ notFoundHandler()</text>
+  <text x="44" y="184" font-size="10" fill="#A8D8C8">✦ createRouter() auto-405</text>
+  <text x="44" y="201" font-size="10" fill="#A8D8C8">✦ withShape() per-route shape</text>
+  <text x="44" y="218" font-size="10" fill="#A8D8C8">✦ res.ok / created / fail</text>
+  <text x="44" y="235" font-size="10" fill="#A8D8C8">✦ Zod / Joi / Yup adapters</text>
+  <text x="44" y="252" font-size="10" fill="#A8D8C8">✦ Proto pollution guard</text>
+  <text x="44" y="269" font-size="10" fill="#A8D8C8">✦ Structured logging (pino)</text>
+  <text x="44" y="286" font-size="10" fill="#A8D8C8">✦ Request ID tracking</text>
+  <text x="44" y="303" font-size="10" fill="#5A9A80">2026-03-13</text>
+
+  <!-- v0.2.0 column -->
+  <rect x="270" y="56" width="210" height="256" rx="10" fill="#0F1F30" stroke="#1A6ECC" stroke-width="1.5"/>
+  <rect x="270" y="56" width="210" height="36" rx="10" fill="#1A6ECC"/>
+  <rect x="270" y="78" width="210" height="14" fill="#1A6ECC"/>
+  <text x="375" y="79" text-anchor="middle" font-size="13" font-weight="700" fill="#FFF">v0.2.0</text>
+  <text x="375" y="95" text-anchor="middle" font-size="10" fill="#90C8FF">Developer Experience</text>
+  <text x="284" y="116" font-size="10" fill="#90C8FF">✦ handle() — validate+async in 1</text>
+  <text x="284" y="133" font-size="10" fill="#90C8FF">✦ createDTO() — auto type infer</text>
+  <text x="284" y="150" font-size="10" fill="#90C8FF">✦ defineRoute({ transform })</text>
+  <text x="284" y="167" font-size="10" fill="#90C8FF">✦ validation.strings.trim</text>
+  <text x="284" y="184" font-size="10" fill="#90C8FF">✦ validation.strings.lowercase</text>
+  <text x="284" y="201" font-size="10" fill="#90C8FF">✦ logger.silent for tests</text>
+  <text x="284" y="218" font-size="10" fill="#90C8FF">✦ 4 new examples</text>
+  <text x="284" y="235" font-size="10" fill="#90C8FF">✦ MIGRATION.md guide</text>
+  <text x="284" y="252" font-size="10" fill="#4A7AA8">No breaking changes</text>
+  <text x="284" y="303" font-size="10" fill="#4A7090">2026-03-16</text>
+
+  <!-- v0.3.0 column -->
+  <rect x="510" y="56" width="220" height="256" rx="10" fill="#200F30" stroke="#8B3FCC" stroke-width="1.5"/>
+  <rect x="510" y="56" width="220" height="36" rx="10" fill="#8B3FCC"/>
+  <rect x="510" y="78" width="220" height="14" fill="#8B3FCC"/>
+  <text x="620" y="79" text-anchor="middle" font-size="13" font-weight="700" fill="#FFF">v0.3.0</text>
+  <text x="620" y="95" text-anchor="middle" font-size="10" fill="#D4A8FF">Production Power</text>
+  <text x="524" y="116" font-size="10" fill="#D4A8FF">✦ generateOpenAPI() — OAS 3.1</text>
+  <text x="524" y="133" font-size="10" fill="#D4A8FF">✦ Swagger UI ready</text>
+  <text x="524" y="150" font-size="10" fill="#D4A8FF">✦ shapeguard/testing</text>
+  <text x="524" y="167" font-size="10" fill="#D4A8FF">✦ mockRequest / mockResponse</text>
+  <text x="524" y="184" font-size="10" fill="#D4A8FF">✦ mockNext()</text>
+  <text x="524" y="201" font-size="10" fill="#D4A8FF">✦ defineRoute({ rateLimit })</text>
+  <text x="524" y="218" font-size="10" fill="#D4A8FF">✦ defineRoute({ cache })</text>
+  <text x="524" y="235" font-size="10" fill="#D4A8FF">✦ Pluggable Redis store</text>
+  <text x="524" y="252" font-size="10" fill="#6A3A90">No breaking changes</text>
+  <text x="524" y="303" font-size="10" fill="#6A3A90">2026-03-16</text>
+
+  <!-- connecting arrows -->
+  <line x1="240" y1="184" x2="268" y2="184" stroke="#0F6E56" stroke-width="1.5" marker-end="url(#arr)"/>
+  <line x1="480" y1="184" x2="508" y2="184" stroke="#1A6ECC" stroke-width="1.5" marker-end="url(#arr2)"/>
+  <defs>
+    <marker id="arr" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
+      <path d="M0,0 L0,6 L6,3 z" fill="#0F6E56"/>
+    </marker>
+    <marker id="arr2" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
+      <path d="M0,0 L0,6 L6,3 z" fill="#1A6ECC"/>
+    </marker>
+  </defs>
+</svg>

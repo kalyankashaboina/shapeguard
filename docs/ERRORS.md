@@ -20,6 +20,8 @@
 
 ---
 
+![Request lifecycle](../assets/shapeguard-architecture.svg)
+
 ## Two types of errors <a name="two-types"></a>
 
 ```

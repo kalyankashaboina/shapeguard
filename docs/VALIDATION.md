@@ -541,3 +541,72 @@ validate({ body: yupAdapter(CreateUserSchema) })
 ```
 
 > **Note:** `createDTO()` is Zod-only. For Joi/Yup pass the adapter directly to `defineRoute()` or `validate()`.
+
+---
+
+## Per-route rate limiting — `rateLimit` <a name="ratelimit"></a>
+
+> v0.3.0+ · No extra package needed
+
+Add `rateLimit` to any `defineRoute()` call:
+
+```ts
+import { defineRoute, createDTO } from 'shapeguard'
+import { z } from 'zod'
+
+const CreateUserRoute = defineRoute({
+  body:      createDTO(z.object({ email: z.string().email() })),
+  rateLimit: {
+    windowMs: 60_000,   // 1 minute window
+    max:      10,        // 10 requests per IP per window
+    message:  'Too many registrations — try again in a minute',
+
+    // Plug in Redis for multi-instance production
+    store:        redisStore,
+
+    // Key by user ID instead of IP (e.g. authenticated routes)
+    keyGenerator: (req) => req.user?.id ?? req.ip,
+  }
+})
+```
+
+When the limit is exceeded shapeguard responds with **429** and `ErrorCode.RATE_LIMIT_EXCEEDED`:
+
+```json
+{
+  "success": false,
+  "message": "Too many registrations — try again in a minute",
+  "error": { "code": "RATE_LIMIT_EXCEEDED", "details": { "retryAfter": 35 } }
+}
+```
+
+The `retryAfter` field tells the client how many seconds until the window resets.
+
+---
+
+## Per-route cache hints — `cache` <a name="cache"></a>
+
+> v0.3.0+ · Sets `Cache-Control` response header automatically
+
+```ts
+// Public endpoint — CDN + browser cache for 60s
+const GetProductRoute = defineRoute({
+  params:   z.object({ id: z.string().uuid() }),
+  response: ProductSchema,
+  cache:    { maxAge: 60 },                   // Cache-Control: public, max-age=60
+})
+
+// User-specific — browser cache only
+const GetProfileRoute = defineRoute({
+  response: ProfileSchema,
+  cache:    { maxAge: 300, private: true },   // Cache-Control: private, max-age=300
+})
+
+// Sensitive — never cache
+const GetPaymentRoute = defineRoute({
+  cache: { maxAge: 0, noStore: true },        // Cache-Control: no-store
+})
+```
+
+Cache headers are set **before** your handler runs — so even if the handler throws, the header is already set correctly.
+

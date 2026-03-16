@@ -161,5 +161,89 @@ const CreateUserBodySchema = z.object({
 
 ## v0.2.x → v0.3.0
 
-Migration guide will be published when v0.3.0 ships.
+**No breaking changes.** All v0.2.x code works unchanged in v0.3.0.
+
+### New opt-in features
+
+**1. OpenAPI + Swagger UI**
+
+```bash
+npm install swagger-ui-express
+```
+
+```ts
+import { generateOpenAPI } from 'shapeguard'
+import swaggerUi from 'swagger-ui-express'
+
+// Your existing defineRoute() definitions become the spec — zero duplication
+const spec = generateOpenAPI({
+  title: 'My API', version: '1.0.0',
+  routes: {
+    'POST /users':     CreateUserRoute,
+    'GET  /users/:id': GetUserRoute,
+    'GET  /users':     ListUsersRoute,
+  }
+})
+
+app.use('/docs', swaggerUi.serve, swaggerUi.setup(spec))
+app.get('/docs/openapi.json', (_req, res) => res.json(spec))
+```
+
+**2. Testing helpers — `shapeguard/testing`**
+
+```ts
+import { mockRequest, mockResponse, mockNext } from 'shapeguard/testing'
+
+// Unit-test controllers without HTTP or Express setup
+const req  = mockRequest({ body: { email: 'alice@example.com' } })
+const res  = mockResponse()
+const next = mockNext()
+
+await createUser[1](req, res, next)  // [1] = handler, [0] = validate middleware
+
+expect(next.error).toBeUndefined()
+expect(res._result().statusCode).toBe(201)
+```
+
+**3. Per-route `rateLimit`**
+
+```ts
+// Add to any existing defineRoute() call
+defineRoute({
+  body:      CreateUserDTO,
+  rateLimit: {
+    windowMs: 60_000,   // 1 minute
+    max:      10,       // 10 requests per IP per minute
+    message:  'Too many requests',
+
+    // Optional: plug in Redis for multi-instance production
+    store: {
+      async get(key) { return redis.get(key) },
+      async set(key, value) { await redis.set(key, value) },
+    },
+
+    // Optional: key by user ID instead of IP
+    keyGenerator: (req) => req.user?.id ?? req.ip,
+  }
+})
+// → 429 RATE_LIMIT_EXCEEDED when exceeded
+```
+
+**4. Per-route `cache` headers**
+
+```ts
+defineRoute({
+  params:   UserParamsSchema,
+  response: UserResponseSchema,
+  cache:    { maxAge: 60, private: true },
+  // cache: { noStore: true }  // for sensitive endpoints
+})
+```
+
+### Package changes
+
+- `joi` and `yup` removed from `devDependencies` — they remain in `optionalDependencies` only
+- New named export: `generateOpenAPI` from `'shapeguard'`
+- New subpath export: `'shapeguard/testing'`
+- New error code: `ErrorCode.RATE_LIMIT_EXCEEDED`
 Track progress in [CHANGELOG.md](./CHANGELOG.md).

@@ -20,7 +20,7 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
-## [0.3.0] — 2026-XX-XX
+## [0.3.0] — 2026-03-16
 
 > **Theme: Production power.** Features serious apps need in production.
 > Existing v0.2.x code is fully compatible — no breaking changes.
