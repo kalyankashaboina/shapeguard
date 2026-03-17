@@ -9,14 +9,25 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
-## [Unreleased] — v0.4.0 planned
+## [Unreleased]
 
-> Work planned after v0.3.0 ships.
+> No unreleased changes.
 
-### Added (planned)
+---
 
-- WebSocket support
-- GraphQL schema integration
+## [0.3.1] — 2026-03-17
+
+> **Theme: Bug fixes.** Six correctness issues found in v0.3.0 audit.
+> Fully backwards-compatible — no API changes.
+
+### Fixed
+
+- **CJS support** (`package.json`) — added `"require"` condition to all `exports` entries and a top-level `"main"` field pointing to `dist/index.cjs`; CJS users no longer receive `ERR_REQUIRE_ESM` when calling `require('shapeguard')`
+- **`allErrors:true` now returns all issues** (`AppError.validation()`) — previously only the first issue was stored in `details`; now the full array is stored when more than one issue is provided, giving clients visibility into every validation failure
+- **`createDTO()` docs examples** (`README.md`, `docs/VALIDATION.md`) — examples showed a plain object being passed to `createDTO()`; the function requires a `z.object(...)` call; all examples corrected
+- **Transform hook no longer swallows `AppError`** (`validate.ts`) — a `throw AppError.conflict()` (or any `AppError`) inside a `transform` function was being caught and re-thrown as a generic 500; it is now re-thrown as-is so the correct status and code reach the client
+- **`slowThreshold` default fixed in dev** (`request-log.ts`) — default was `0ms` in development, making `0 > 0` always false and the `SLOW` badge never visible; default is now `500ms` in dev (`1000ms` in prod unchanged)
+- **`setMaxListeners` leak removed** (`logger.ts`) — `process.setMaxListeners(getMaxListeners() + 1)` was called on every `shapeguard()` mount; with 10+ test instances this caused `MaxListenersExceededWarning`; pino v8 does not require this call and the line has been removed
 
 ---
 

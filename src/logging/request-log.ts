@@ -20,7 +20,7 @@
 // Config (all optional — auto-detected from NODE_ENV):
 //   logAllRequests  — log every request, not just errors  (default: true in dev, false in prod)
 //   logRequestId    — print [req_id] on each log line     (default: true)
-//   slowThreshold   — SLOW warning if response >= N ms    (default: 0=off in dev, 1000 in prod)
+//   slowThreshold   — SLOW warning if response >= N ms    (default: 500ms in dev, 1000 in prod)
 //   logRequestBody  — include redacted request body       (default: false — security risk)
 //   logResponseBody — include redacted response body      (default: false — security risk)
 //   redact          — extra field paths to always redact
@@ -145,7 +145,7 @@ export function requestLogger(logger: Logger, config: LoggerConfig = {}): Reques
   const logId       = config.logRequestId   ?? true
   const slowMs      = config.slowThreshold !== undefined
     ? config.slowThreshold
-    : (isDev ? 0 : 1000)
+    : (isDev ? 500 : 1000)
   const logReqBody  = config.logRequestBody  ?? false
   const logResBody  = config.logResponseBody ?? false
   const extraRedact = config.redact ?? []

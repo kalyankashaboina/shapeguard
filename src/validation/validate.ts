@@ -7,7 +7,7 @@
 
 import type { Request, Response, NextFunction, RequestHandler } from 'express'
 import type { RouteSchema, SchemaAdapter, ValidationConfig, ValidationIssue } from '../types/index.js'
-import { AppError } from '../errors/AppError.js'
+import { AppError, isAppError } from '../errors/AppError.js'
 import { sanitizeValidationIssue } from './sanitize.js'
 import { runPreParse, DEFAULT_LIMITS, enforceContentType, type PreParseLimits } from '../core/pre-parse.js'
 import { asyncHandler } from '../errors/not-found.js'
@@ -161,6 +161,7 @@ async function validateRequest(req: Request, res: Response, schema: RouteSchema 
       try {
         parsed = await Promise.resolve(transform(parsed))
       } catch (err) {
+        if (isAppError(err)) throw err
         throw AppError.internal(err instanceof Error ? err.message : 'Transform failed')
       }
     }

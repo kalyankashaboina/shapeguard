@@ -123,11 +123,11 @@ import { z } from 'zod'
 import { defineRoute, createDTO } from 'shapeguard'
 
 // createDTO() infers the TypeScript type automatically — no manual z.infer needed
-const CreateUserDTO = createDTO({
+const CreateUserDTO = createDTO(z.object({
   email:    z.string().email(),
   name:     z.string().min(1).max(100),
   password: z.string().min(8),
-})
+}))
 
 const UserResponseSchema = z.object({
   id:        z.string().uuid(),
@@ -436,9 +436,8 @@ total             ~20kb gzip
 | [LOGGING.md](./docs/LOGGING.md) | pino, requestId, body logging, dev vs prod, custom logger |
 | [RESPONSE.md](./docs/RESPONSE.md) | res helpers, withShape, all response shapes |
 | [CONFIGURATION.md](./docs/CONFIGURATION.md) | every config option, global vs scoped |
-| [MIGRATION.md](./MIGRATION.md) | upgrade guides — v0.1.x → v0.2.0 → v0.3.0 |
+| [MIGRATION.md](./MIGRATION.md) | upgrade guides — v0.1.x → v0.2.0 → v0.3.0 → v0.3.1 |
 | [CHANGELOG.md](./CHANGELOG.md) | version history |
-| [SETUP.md](./SETUP.md) | GitHub + npm publish steps |
 
 ## Examples
 

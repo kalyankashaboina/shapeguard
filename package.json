@@ -1,6 +1,6 @@
 {
   "name": "shapeguard",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "FastAPI-style validation, response shaping, and error handling for Node.js + Express",
   "author": "Kalyan Kashaboina <kalyankashaboina07@gmail.com> (https://github.com/kalyankashaboina)",
   "license": "MIT",
@@ -16,21 +16,26 @@
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
-      "import": "./dist/index.mjs"
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.cjs"
     },
     "./adapters/joi": {
       "types": "./dist/adapters/joi.d.ts",
-      "import": "./dist/adapters/joi.mjs"
+      "import": "./dist/adapters/joi.mjs",
+      "require": "./dist/adapters/joi.cjs"
     },
     "./adapters/yup": {
       "types": "./dist/adapters/yup.d.ts",
-      "import": "./dist/adapters/yup.mjs"
+      "import": "./dist/adapters/yup.mjs",
+      "require": "./dist/adapters/yup.cjs"
     },
     "./testing": {
       "types": "./dist/testing/index.d.ts",
-      "import": "./dist/testing/index.mjs"
+      "import": "./dist/testing/index.mjs",
+      "require": "./dist/testing/index.cjs"
     }
   },
+  "main": "./dist/index.cjs",
   "module": "./dist/index.mjs",
   "types": "./dist/index.d.ts",
   "files": [

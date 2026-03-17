@@ -135,7 +135,6 @@ function makeConsoleLogger(minLevel: string, pretty: boolean, redact: string[]):
 function tryPino(level: string, pretty: boolean, redact: string[]): Logger | null {
   try {
     const pino = _req('pino') as (o: object) => Logger
-    if (pretty) process.setMaxListeners(process.getMaxListeners() + 1)
     return pino({
       level,
       redact: { paths: redact, censor: '[REDACTED]' },

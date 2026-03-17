@@ -35,3 +35,6 @@ yarn-error.log*
 # Intermediate build dirs
 dist-new/
 dist-ts/
+
+
+release.ps1

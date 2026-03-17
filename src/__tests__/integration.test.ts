@@ -230,10 +230,11 @@ describe('validate() → strip → freeze pipeline', () => {
     expect(result.success).toBe(false)
     if (!result.success) {
       expect(result.errors.length).toBe(2)
-      // allErrors in AppError.validation returns first error as details
+      // allErrors in AppError.validation stores the full array in details
       const appErr = AppError.validation(result.errors)
       expect(appErr.statusCode).toBe(422)
-      expect((appErr.details as any).field).toBe('email')
+      expect(Array.isArray(appErr.details)).toBe(true)
+      expect((appErr.details as any)[0].field).toBe('email')
     }
   })
 })

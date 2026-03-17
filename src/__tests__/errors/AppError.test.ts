@@ -107,13 +107,14 @@ describe('AppError', () => {
       expect(err.details).toEqual(issue)
     })
 
-    it('creates 422 with array of issues — uses first', () => {
+    it('creates 422 with array of issues — stores full array in details', () => {
       const issues = [
         { field: 'email', message: 'Invalid email', code: 'invalid_string' },
         { field: 'name',  message: 'Required',      code: 'invalid_type'   },
       ]
       const err = AppError.validation(issues)
-      expect(err.details).toEqual(issues[0])
+      expect(Array.isArray(err.details)).toBe(true)
+      expect(err.details).toEqual(issues)
     })
   })
 
