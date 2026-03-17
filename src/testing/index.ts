@@ -30,15 +30,22 @@ export interface MockRequestOptions {
  * expect(res._result().statusCode).toBe(201)
  */
 export function mockRequest(opts: MockRequestOptions = {}): Request {
+  const ip      = opts.headers?.['x-forwarded-for'] ?? '127.0.0.1'
+  const headers = opts.headers ?? {}
   return {
     body:    opts.body    ?? {},
     params:  opts.params  ?? {},
     query:   opts.query   ?? {},
-    headers: opts.headers ?? {},
+    headers,
     method:  opts.method  ?? 'GET',
     path:    opts.path    ?? '/',
     id:      opts.id      ?? 'test-req-id',
     route:   { path: opts.path ?? '/' },
+    ip,
+    socket:  { remoteAddress: ip },
+    get(name: string): string | undefined {
+      return (headers as Record<string, string>)[name.toLowerCase()]
+    },
   } as unknown as Request
 }
 

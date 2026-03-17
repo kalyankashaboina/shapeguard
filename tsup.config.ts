@@ -2,11 +2,12 @@ import { defineConfig } from 'tsup'
 
 export default defineConfig({
   entry: {
-    index:            'src/index.ts',
-    'adapters/joi':   'src/adapters/joi.ts',
-    'adapters/yup':   'src/adapters/yup.ts',
-    'testing/index':  'src/testing/index.ts',
-    'openapi/index':  'src/openapi/index.ts',
+    index:               'src/index.ts',
+    'adapters/joi':      'src/adapters/joi.ts',
+    'adapters/yup':      'src/adapters/yup.ts',
+    'adapters/winston':  'src/adapters/winston.ts',
+    'testing/index':     'src/testing/index.ts',
+    'openapi/index':     'src/openapi/index.ts',
   },
   format:    ['esm', 'cjs'],
   dts:       true,
@@ -28,7 +29,7 @@ export default defineConfig({
     'pino-pretty',   // ← moved out
   ],
 
-  banner: { js: `/* shapeguard v0.3.0 — MIT */` },
+  banner: { js: `/* shapeguard v0.4.0 — MIT */` },
 
   outExtension({ format }) {
     return { js: format === 'esm' ? '.mjs' : '.cjs' }

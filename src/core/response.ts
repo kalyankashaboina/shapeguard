@@ -27,11 +27,21 @@ export function detectCircular(obj: unknown, seen = new WeakSet()): void {
   for (const val of Object.values(obj as object)) detectCircular(val, seen)
 }
 
+// ── shallowFreeze — freeze only the envelope, not the data inside ────────
+// deepFreeze was freezing the caller's data object too, which meant code like:
+//   const user = { name: 'Alice' }
+//   res.created({ data: user })
+//   user.name = 'Bob'  // ← would throw in strict mode silently fail otherwise
+// Callers should be able to mutate their own objects after sending a response.
+function shallowFreezeEnvelope<T extends object>(obj: T): T {
+  return Object.freeze(obj)
+}
+
 // ── Build success envelope ────────────────────
 export function buildSuccess<T>(data: T, message: string, config?: ResponseConfig): SuccessEnvelope<T> {
   const envelope = { success: true as const, message, data }
   const shaped   = applyShape(envelope as unknown as Record<string, unknown>, config?.shape)
-  return deepFreeze(shaped) as unknown as SuccessEnvelope<T>
+  return shallowFreezeEnvelope(shaped) as unknown as SuccessEnvelope<T>
 }
 
 // ── Build paginated envelope ──────────────────
@@ -60,7 +70,7 @@ export function buildError(
     error: { code, message, details: sanitize && typeof details !== 'string' ? null : details },
   }
   const shaped = applyShape(envelope as unknown as Record<string, unknown>, config?.shape)
-  return deepFreeze(shaped) as unknown as ErrorEnvelope
+  return shallowFreezeEnvelope(shaped) as unknown as ErrorEnvelope
 }
 
 // ── Apply global shape mapping ────────────────

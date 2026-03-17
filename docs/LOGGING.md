@@ -195,9 +195,12 @@ app.use(shapeguard({ logger: { instance: logger } }))
 ```
 
 ```ts
+// Winston — use the built-in adapter (v0.4.0+)
 import winston from 'winston'
-const logger = winston.createLogger({ transports: [new winston.transports.Console()] })
-app.use(shapeguard({ logger: { instance: logger } }))
+import { winstonAdapter } from 'shapeguard/adapters/winston'
+
+const wLogger = winston.createLogger({ transports: [new winston.transports.Console()] })
+app.use(shapeguard({ logger: { instance: winstonAdapter(wLogger) } }))
 ```
 
 When `instance` is provided, all other logger options (`level`, `pretty`, `redact`, etc.) are ignored — you manage the logger entirely.
@@ -225,7 +228,7 @@ app.use(shapeguard({
     // Show [req_id] on every log line (default: true)
     logRequestId: true,
 
-    // SLOW warning if response >= N ms (default: 0=disabled in dev, 1000 in prod)
+    // SLOW warning if response >= N ms (default: 500ms in dev, 1000 in prod)
     slowThreshold: 1000,
 
     // Include request body in logs — off by default (security risk)

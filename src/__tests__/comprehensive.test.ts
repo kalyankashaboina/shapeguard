@@ -136,13 +136,15 @@ describe('AppError', () => {
       expect(e.details).toEqual(issue)
     })
 
-    it('validation() array picks first issue', () => {
+    it('validation() array stores full array in details', () => {
       const issues = [
         { field: 'email', message: 'bad email', code: 'invalid_string' },
         { field: 'name',  message: 'too short', code: 'too_small' },
       ]
       const e = AppError.validation(issues)
-      expect((e.details as any).field).toBe('email')
+      expect(Array.isArray(e.details)).toBe(true)
+      expect((e.details as any)[0].field).toBe('email')
+      expect((e.details as any)[1].field).toBe('name')
     })
 
     it('internal() default message', () => {
@@ -1271,13 +1273,12 @@ describe('Real-world scenarios', () => {
   })
 
   describe('allErrors mode', () => {
-    it('validate({ allErrors: true }) collects all issues', async () => {
+    it('validate({ allErrors: true }) collects all issues and returns full array in details', async () => {
       const app = makeApp()
       const schema = makeSchema(null, true, [
         { path: ['email'], message: 'Invalid email', code: 'invalid_string' },
         { path: ['name'],  message: 'Too short',     code: 'too_small' },
       ])
-      // allErrors uses the first issue for AppError.validation — schema has multiple
       app.post('/test',
         validate({ body: schema as any, allErrors: true }),
         asyncHandler(async (_req, res) => { res.json({ ok: true }) })
@@ -1291,6 +1292,11 @@ describe('Real-world scenarios', () => {
 
       expect(res.status).toBe(422)
       expect(res.body.error.code).toBe(ErrorCode.VALIDATION_ERROR)
+      // Bug 2 fix: full array must be present in details, not just the first issue
+      expect(Array.isArray(res.body.error.details)).toBe(true)
+      expect(res.body.error.details).toHaveLength(2)
+      expect(res.body.error.details[0].field).toBe('email')
+      expect(res.body.error.details[1].field).toBe('name')
     })
   })
 
@@ -1576,7 +1582,7 @@ describe('Transform hook on defineRoute()', () => {
     expect(res.body.password).toBe('hashed:plaintext')
   })
 
-  it('transform error returns 500 AppError', async () => {
+  it('transform error returns 500 AppError for plain Error', async () => {
     const app    = makeApp()
     const schema = makeSchema({})
     const route  = defineRoute({
@@ -1593,6 +1599,27 @@ describe('Transform hook on defineRoute()', () => {
       .send({})
 
     expect(res.status).toBe(500)
+  })
+
+  it('transform re-throws AppError as-is (Bug 4 fix — not wrapped in 500)', async () => {
+    const app    = makeApp()
+    const schema = makeSchema({})
+    const route  = defineRoute({
+      body:      schema as any,
+      transform: async () => { throw AppError.conflict('username') },
+    })
+
+    app.post('/test', ...handle(route, async (_req, res) => { res.json({ ok: true }) }))
+    app.use(errorHandler({ debug: true }))
+
+    const res = await supertest(app)
+      .post('/test')
+      .set('Content-Type', 'application/json')
+      .send({})
+
+    // Must be 409 (the AppError status), not 500 (the wrapped error status)
+    expect(res.status).toBe(409)
+    expect(res.body.error.code).toBe(ErrorCode.CONFLICT)
   })
 
   it('route without transform works normally', async () => {

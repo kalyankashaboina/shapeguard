@@ -104,7 +104,7 @@ app.use(shapeguard({
 
     // Flag requests slower than this many milliseconds.
     // 0 = disabled entirely.
-    // Default: 0 dev / 1000 prod
+    // Default: 500 dev / 1000 prod
     slowThreshold: 1000,
 
     // Include req.body in the request log entry.
@@ -333,7 +333,7 @@ with wrong HTTP method. Works with parameterized routes like `/:id`.
 | `logger.pretty` | `boolean` | `true` dev / `false` prod | pino-pretty format |
 | `logger.logAllRequests` | `boolean` | `true` dev / `false` prod | Log every 2xx |
 | `logger.logRequestId` | `boolean` | `true` | Show [req_id] in log lines |
-| `logger.slowThreshold` | `number` | `0` dev / `1000` prod | Slow warn ms (0=off) |
+| `logger.slowThreshold` | `number` | `500` dev / `1000` prod | Slow warn ms (0=off) |
 | `logger.logRequestBody` | `boolean` | `false` | Log req.body (redacted) |
 | `logger.logResponseBody` | `boolean` | `false` | Log response JSON (redacted) |
 | `logger.redact` | `string[]` | `[]` | Extra redact paths |

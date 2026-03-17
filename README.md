@@ -13,41 +13,31 @@ Strict by default. Lightweight. Production-ready.
 
 ---
 
-## What's new in v0.3.0
+## What's new in v0.4.0
 
-> **OpenAPI + Swagger · Testing helpers · Rate limiting · Cache hints**
+> **Bug fixes · Winston adapter · Stronger validation guardrails**
 
 ```ts
-// Auto-generate OpenAPI 3.1 spec — zero duplication
-import { generateOpenAPI } from 'shapeguard'
-import swaggerUi from 'swagger-ui-express'
+// Winston users — no more manual wrapper
+import winston from 'winston'
+import { winstonAdapter } from 'shapeguard/adapters/winston'
 
-const spec = generateOpenAPI({
-  title: 'My API', version: '1.0.0',
-  routes: {
-    'POST /users':     CreateUserRoute,   // your existing defineRoute() definitions
-    'GET  /users/:id': GetUserRoute,
-  }
-})
-app.use('/docs', swaggerUi.serve, swaggerUi.setup(spec))  // open /docs in browser
-app.get('/openapi.json', (_req, res) => res.json(spec))    // import into Postman
+const wLogger = winston.createLogger({ transports: [new winston.transports.Console()] })
+app.use(shapeguard({ logger: { instance: winstonAdapter(wLogger) } }))
 
-// Unit-test controllers — no HTTP, no Express setup
-import { mockRequest, mockResponse, mockNext } from 'shapeguard/testing'
-const req = mockRequest({ body: { email: 'alice@example.com' } })
-const res = mockResponse()
-await createUser[1](req, res, mockNext())
-expect(res._result().statusCode).toBe(201)
+// Bad logger caught at startup, not on first request
+app.use(shapeguard({ logger: { instance: myLogger } }))
+// throws: [shapeguard] logger.instance is missing required method(s): debug, warn
 
-// Built-in rate limiting — no extra package
-defineRoute({
-  body:      CreateUserDTO,
-  rateLimit: { windowMs: 60_000, max: 10, store: redisStore }, // plug in Redis
-  cache:     { maxAge: 60, private: true },                     // Cache-Control header
-})
+// allErrors now works with Joi and Yup (was silently ignored before)
+import { joiAdapter } from 'shapeguard/adapters/joi'
+defineRoute({ body: joiAdapter(JoiSchema, { allErrors: true }) })
+
+// withShape warns in dev when a token path doesn't exist
+withShape({ uptime: '{data.uptime}' })  // logs warning if data.uptime is missing
 ```
 
-[→ Full v0.3.0 changelog](./CHANGELOG.md) · [→ Migration guide](./MIGRATION.md)
+[→ Full v0.4.0 changelog](./CHANGELOG.md) · [→ Migration guide](./MIGRATION.md)
 
 ---
 
@@ -93,8 +83,9 @@ If pino is not installed, shapeguard uses a built-in console logger automaticall
 | `zod`         | Yes      | Schema validation              |
 | `pino`        | Optional | Richer logging if installed    |
 | `pino-pretty` | Optional | Pretty dev logs with pino      |
-| `joi`         | Optional | Via `shapeguard/adapters/joi`  |
-| `yup`         | Optional | Via `shapeguard/adapters/yup`  |
+| `joi`         | Optional | Via `shapeguard/adapters/joi`     |
+| `yup`         | Optional | Via `shapeguard/adapters/yup`     |
+| `winston`     | Optional | Via `shapeguard/adapters/winston` |
 
 ---
 
@@ -123,11 +114,11 @@ import { z } from 'zod'
 import { defineRoute, createDTO } from 'shapeguard'
 
 // createDTO() infers the TypeScript type automatically — no manual z.infer needed
-const CreateUserDTO = createDTO({
+const CreateUserDTO = createDTO(z.object({
   email:    z.string().email(),
   name:     z.string().min(1).max(100),
   password: z.string().min(8),
-})
+}))
 
 const UserResponseSchema = z.object({
   id:        z.string().uuid(),
@@ -436,9 +427,8 @@ total             ~20kb gzip
 | [LOGGING.md](./docs/LOGGING.md) | pino, requestId, body logging, dev vs prod, custom logger |
 | [RESPONSE.md](./docs/RESPONSE.md) | res helpers, withShape, all response shapes |
 | [CONFIGURATION.md](./docs/CONFIGURATION.md) | every config option, global vs scoped |
-| [MIGRATION.md](./MIGRATION.md) | upgrade guides — v0.1.x → v0.2.0 → v0.3.0 |
+| [MIGRATION.md](./MIGRATION.md) | upgrade guides — v0.1.x → v0.2.0 → v0.3.0 → v0.3.1 → v0.4.0 |
 | [CHANGELOG.md](./CHANGELOG.md) | version history |
-| [SETUP.md](./SETUP.md) | GitHub + npm publish steps |
 
 ## Examples
 

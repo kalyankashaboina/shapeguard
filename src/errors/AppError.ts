@@ -54,9 +54,10 @@ export class AppError extends Error {
     return new AppError(ErrorCode.CONFLICT, resource ? `${resource} already exists` : 'Resource already exists', 409)
   }
   static validation(details: ValidationIssue | ValidationIssue[]): AppError {
-    // Store first issue only — keeps the error shape consistent (single object, not array)
-    const single = Array.isArray(details) ? details[0]! : details
-    return new AppError(ErrorCode.VALIDATION_ERROR, 'Validation failed', 422, single)
+    // Store the full array when multiple issues are provided (allErrors:true),
+    // or the single issue when only one is given.
+    const stored = Array.isArray(details) && details.length === 1 ? details[0]! : details
+    return new AppError(ErrorCode.VALIDATION_ERROR, 'Validation failed', 422, stored)
   }
   static internal(message = 'Internal server error'): AppError {
     return new AppError(ErrorCode.INTERNAL_ERROR, message, 500)
