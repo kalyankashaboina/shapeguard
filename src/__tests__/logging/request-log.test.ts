@@ -1,7 +1,12 @@
 // src/__tests__/logging/request-log.test.ts
 import { describe, it, expect, vi } from 'vitest'
 import { requestLogger } from '../../logging/request-log.js'
+import { createLogger } from '../../logging/logger.js'
+import { winstonAdapter } from '../../adapters/winston.js'
+import { withShape } from '../../router/with-shape.js'
+import { shapeguard } from '../../shapeguard.js'
 import type { Logger } from '../../types/index.js'
+import type { Request, Response, NextFunction } from 'express'
 
 function makeLogger() {
   const calls: Record<string, unknown[][]> = { debug: [], info: [], warn: [], error: [] }
@@ -297,4 +302,185 @@ describe('requestLogger', () => {
     })
   })
 
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Bug 11: Logger instance missing methods — validated at mount time
+// ─────────────────────────────────────────────────────────────────────────────
+describe('createLogger — instance validation (Bug 11)', () => {
+  it('accepts a valid instance with all four methods', () => {
+    const instance: Logger = {
+      debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn(),
+    }
+    expect(() => createLogger({ instance })).not.toThrow()
+  })
+
+  it('throws a clear error when debug() is missing', () => {
+    const bad = { info: vi.fn(), warn: vi.fn(), error: vi.fn() }
+    expect(() => createLogger({ instance: bad as unknown as Logger }))
+      .toThrow('[shapeguard] logger.instance is missing required method(s): debug')
+  })
+
+  it('throws listing ALL missing methods', () => {
+    const bad = { info: vi.fn() }
+    expect(() => createLogger({ instance: bad as unknown as Logger }))
+      .toThrow('debug, warn, error')
+  })
+
+  it('mentions the winston adapter in the error message', () => {
+    const bad = { info: vi.fn() }
+    expect(() => createLogger({ instance: bad as unknown as Logger }))
+      .toThrow('shapeguard/adapters/winston')
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Bug 12: withShape warns in dev when token resolves to undefined
+// ─────────────────────────────────────────────────────────────────────────────
+describe('withShape — undefined token warning (Bug 12)', () => {
+  function makeReq(): Request {
+    return {} as unknown as Request
+  }
+
+  function makeRes(body: unknown) {
+    let captured: unknown
+    const res = {
+      headersSent: false,
+      json(b: unknown) { captured = b; return this },
+      get captured() { return captured },
+    }
+    return res as unknown as Response & { captured: unknown }
+  }
+
+  it('warns when a token path does not exist in response', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const mw   = withShape({ missing: '{data.notHere}' })
+    const res  = makeRes({ success: true, data: { ok: true } })
+
+    mw(makeReq(), res, vi.fn() as unknown as NextFunction)
+    ;(res as any).json({ success: true, data: { ok: true } })
+
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining('withShape'),
+    )
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining('missing'),
+    )
+    warn.mockRestore()
+  })
+
+  it('does not warn when token resolves successfully', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const mw   = withShape({ ok: '{data.ok}' })
+    const res  = makeRes(null)
+
+    mw(makeReq(), res, vi.fn() as unknown as NextFunction)
+    ;(res as any).json({ success: true, data: { ok: true } })
+
+    expect(warn).not.toHaveBeenCalled()
+    warn.mockRestore()
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Bug 13: Two shapeguard() instances do not share config
+// ─────────────────────────────────────────────────────────────────────────────
+describe('shapeguard() — two instances do not share config (Bug 13)', () => {
+  function makeReqRes(validationConfig: Record<string, unknown>) {
+    const req = {
+      headers: {}, method: 'GET', path: '/', id: 'x',
+    } as unknown as Request
+    const locals: Record<string, unknown> = {}
+    const res = {
+      locals,
+      headersSent: false,
+      setHeader: vi.fn(),
+      json: vi.fn(),
+      once: vi.fn(),
+    } as unknown as Response
+    return { req, res }
+  }
+
+  it('each instance writes its own validationConfig to res.locals', () => {
+    const mw1 = shapeguard({ validation: { strings: { trim: true } }, logger: { silent: true } })
+    const mw2 = shapeguard({ validation: { strings: { lowercase: true } }, logger: { silent: true } })
+
+    const { req: req1, res: res1 } = makeReqRes({})
+    const { req: req2, res: res2 } = makeReqRes({})
+    const next = vi.fn()
+
+    mw1(req1, res1, next)
+    mw2(req2, res2, next)
+
+    const cfg1 = (res1.locals as any)['__sg_validation_config__']
+    const cfg2 = (res2.locals as any)['__sg_validation_config__']
+
+    expect(cfg1?.strings?.trim).toBe(true)
+    expect(cfg1?.strings?.lowercase).toBeUndefined()
+    expect(cfg2?.strings?.lowercase).toBe(true)
+    expect(cfg2?.strings?.trim).toBeUndefined()
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Bug 14: Winston adapter
+// ─────────────────────────────────────────────────────────────────────────────
+describe('winstonAdapter (Bug 14)', () => {
+  function makeWinston() {
+    return {
+      debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn(),
+    }
+  }
+
+  it('returns a Logger-shaped object', () => {
+    const w      = makeWinston()
+    const logger = winstonAdapter(w)
+    expect(typeof logger.debug).toBe('function')
+    expect(typeof logger.info).toBe('function')
+    expect(typeof logger.warn).toBe('function')
+    expect(typeof logger.error).toBe('function')
+  })
+
+  it('flips argument order: shapeguard calls (obj, msg), winston receives (msg, obj)', () => {
+    const w      = makeWinston()
+    const logger = winstonAdapter(w)
+    const meta   = { requestId: 'abc', status: 200 }
+    const msg    = 'request completed'
+
+    logger.info(meta, msg)
+
+    expect(w.info).toHaveBeenCalledWith(msg, meta)
+  })
+
+  it('passes empty string when msg is undefined', () => {
+    const w      = makeWinston()
+    const logger = winstonAdapter(w)
+    logger.warn({ code: 'TEST' })
+    expect(w.warn).toHaveBeenCalledWith('', { code: 'TEST' })
+  })
+
+  it('wraps all four levels correctly', () => {
+    const w      = makeWinston()
+    const logger = winstonAdapter(w)
+    logger.debug({ a: 1 }, 'dbg')
+    logger.info ({ b: 2 }, 'inf')
+    logger.warn ({ c: 3 }, 'wrn')
+    logger.error({ d: 4 }, 'err')
+    expect(w.debug).toHaveBeenCalledWith('dbg', { a: 1 })
+    expect(w.info ).toHaveBeenCalledWith('inf', { b: 2 })
+    expect(w.warn ).toHaveBeenCalledWith('wrn', { c: 3 })
+    expect(w.error).toHaveBeenCalledWith('err', { d: 4 })
+  })
+
+  it('throws a clear error when passed an invalid logger', () => {
+    const bad = { info: vi.fn() }
+    expect(() => winstonAdapter(bad as any))
+      .toThrow('[shapeguard] winstonAdapter')
+  })
+
+  it('is accepted by createLogger({ instance }) without throwing', () => {
+    const w      = makeWinston()
+    const logger = winstonAdapter(w)
+    expect(() => createLogger({ instance: logger })).not.toThrow()
+  })
 })

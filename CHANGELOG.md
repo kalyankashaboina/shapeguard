@@ -15,6 +15,27 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [0.4.0] — 2026-03-17
+
+> **Theme: Correctness and extensibility.** Eight bugs fixed, Winston adapter shipped.
+> Fully backwards-compatible — no breaking changes.
+
+### Added
+
+- `shapeguard/adapters/winston` — ships a `winstonAdapter()` function that bridges Winston's argument order (`msg, meta`) to shapeguard's Logger interface (`meta, msg`); import and pass to `logger.instance` — no manual wrapper needed
+
+### Fixed
+
+- **Logger instance validated at mount time** (`logger.ts`) — passing a logger without `.debug()`, `.info()`, `.warn()`, or `.error()` now throws a clear error immediately listing the missing methods, rather than crashing with a `TypeError` on the first request; error message explicitly mentions `shapeguard/adapters/winston`
+- **`withShape` warns on undefined tokens** (`with-shape.ts`) — in development, a `console.warn` is emitted when a template token (e.g. `{data.uptime}`) does not exist in the response; catches path typos immediately rather than silently sending `undefined` to clients
+- **Global config no longer shared between `shapeguard()` instances** (`validate.ts`, `shapeguard.ts`) — removed the `setFallbackValidationConfig` module-level singleton; config is now scoped exclusively via `res.locals` per request, so two app instances running in the same process (e.g. integration tests with dev + prod apps) can no longer overwrite each other's validation config
+- **Joi/Yup `allErrors` option** (`adapters/joi.ts`, `adapters/yup.ts`) — both adapters now respect the `allErrors` option passed to `joiAdapter()` and `yupAdapter()`; previously `abortEarly` was hardcoded to `true` so `allErrors` had zero effect *(already fixed in v0.3.1 codebase, confirmed and tested in v0.4.0)*
+- **`router.route()` 405 tracking** (`router/create-router.ts`) — `router.route('/users').get().post()` pattern is now intercepted by the proxy and tracked for 405 Method Not Allowed responses *(already fixed in v0.3.1 codebase, confirmed and tested in v0.4.0)*
+- **`Object.freeze` scoped to envelope only** (`core/response.ts`) — `res.created({ data: user })` no longer deep-freezes the caller's `user` variable; only the response envelope wrapper is frozen *(already fixed in v0.3.1 codebase, confirmed and tested in v0.4.0)*
+- **`mockRequest` socket, ip, and `req.get`** (`testing/index.ts`) — `socket.remoteAddress`, `ip`, and `get(header)` are now present; rate limiter tests no longer share a single bucket due to unknown IP *(already fixed in v0.3.1 codebase, confirmed and tested in v0.4.0)*
+
+---
+
 ## [0.3.1] — 2026-03-17
 
 > **Theme: Bug fixes.** Six correctness issues found in v0.3.0 audit.

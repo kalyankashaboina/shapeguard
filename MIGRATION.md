@@ -247,3 +247,26 @@ defineRoute({
 - New subpath export: `'shapeguard/testing'`
 - New error code: `ErrorCode.RATE_LIMIT_EXCEEDED`
 Track progress in [CHANGELOG.md](./CHANGELOG.md).
+
+---
+
+## v0.3.x → v0.4.0
+
+No breaking changes. All v0.3.x code is fully compatible.
+
+### Internal change — `setFallbackValidationConfig` removed
+
+This function was an internal export from `validation/validate.ts` used only by `shapeguard()` itself. It is not part of the public API and was never documented. If you were importing it directly (unsupported usage), remove the call — config is now scoped automatically via `res.locals` per request.
+
+### New: Winston adapter
+
+```ts
+import winston from 'winston'
+import { winstonAdapter } from 'shapeguard/adapters/winston'
+
+const wLogger = winston.createLogger({ ... })
+
+app.use(shapeguard({
+  logger: { instance: winstonAdapter(wLogger) },
+}))
+```

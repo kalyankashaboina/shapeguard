@@ -18,19 +18,29 @@ type YupValidationError = {
   type?:   string
 }
 
+export interface YupAdapterOptions {
+  // Collect all validation errors instead of stopping at the first.
+  // Maps to Yup's abortEarly: false (default: false — collect all errors)
+  allErrors?: boolean
+}
+
 export function yupAdapter<TOutput = unknown>(
-  schema: YupSchema<TOutput>
+  schema: YupSchema<TOutput>,
+  opts:   YupAdapterOptions = {},
 ): SchemaAdapter<TOutput> {
+  // allErrors defaults to true (collect all) — abortEarly is the inverse
+  const abortEarly = opts.allErrors === false
+
   return {
     library: 'yup',
 
     async parse(data: unknown): Promise<TOutput> {
-      return schema.validate(data, { abortEarly: true, stripUnknown: false })
+      return schema.validate(data, { abortEarly, stripUnknown: false })
     },
 
     async safeParse(data: unknown): Promise<SafeParseResult<TOutput>> {
       try {
-        const value = await schema.validate(data, { abortEarly: true, stripUnknown: false })
+        const value = await schema.validate(data, { abortEarly, stripUnknown: false })
         return { success: true, data: value as TOutput }
       } catch (err) {
         const yupErr = err as YupValidationError

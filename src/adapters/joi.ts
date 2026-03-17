@@ -14,18 +14,30 @@ type JoiSchema = {
   }
 }
 
-export function joiAdapter<TOutput = unknown>(schema: JoiSchema): SchemaAdapter<TOutput> {
+export interface JoiAdapterOptions {
+  // Collect all validation errors instead of stopping at the first.
+  // Maps to Joi's abortEarly: false (default: false — collect all errors)
+  allErrors?: boolean
+}
+
+export function joiAdapter<TOutput = unknown>(
+  schema: JoiSchema,
+  opts:   JoiAdapterOptions = {},
+): SchemaAdapter<TOutput> {
+  // allErrors defaults to true (collect all) — abortEarly is the inverse
+  const abortEarly = opts.allErrors === false
+
   return {
     library: 'joi',
 
     async parse(data: unknown): Promise<TOutput> {
-      const { error, value } = schema.validate(data, { abortEarly: true, stripUnknown: false, allowUnknown: false })
+      const { error, value } = schema.validate(data, { abortEarly, stripUnknown: false, allowUnknown: false })
       if (error) throw error
       return value as TOutput
     },
 
     async safeParse(data: unknown): Promise<SafeParseResult<TOutput>> {
-      const { error, value } = schema.validate(data, { abortEarly: true, stripUnknown: false, allowUnknown: false })
+      const { error, value } = schema.validate(data, { abortEarly, stripUnknown: false, allowUnknown: false })
       if (error) {
         return {
           success: false,
