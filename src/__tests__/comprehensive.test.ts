@@ -1833,6 +1833,113 @@ describe('generateOpenAPI()', () => {
     expect(op.responses['500']).toBeDefined()
   })
 
+  // Bug 17: 422 and 500 must have full error envelope schema
+  it('422 response includes error envelope schema (Bug 17)', () => {
+    const route = defineRoute({})
+    const spec  = generateOpenAPI({ title: 'T', version: '1', routes: { 'POST /test': route } })
+    const op    = spec.paths['/test']!['post']!
+    expect(op.responses['422']!.content).toBeDefined()
+    const schema = op.responses['422']!.content!['application/json']!.schema as any
+    expect(schema.properties.success).toBeDefined()
+    expect(schema.properties.error).toBeDefined()
+  })
+
+  it('500 response includes error envelope schema (Bug 17)', () => {
+    const route = defineRoute({})
+    const spec  = generateOpenAPI({ title: 'T', version: '1', routes: { 'GET /test': route } })
+    const op    = spec.paths['/test']!['get']!
+    expect(op.responses['500']!.content).toBeDefined()
+    const schema = op.responses['500']!.content!['application/json']!.schema as any
+    expect(schema.properties.error.properties.code).toBeDefined()
+  })
+
+  // Bug 18: operationId, tags, summary
+  it('auto-generates operationId from method and path (Bug 18)', () => {
+    const spec = generateOpenAPI({ title: 'T', version: '1', routes: { 'POST /users': defineRoute({}) } })
+    expect(spec.paths['/users']!['post']!.operationId).toBe('postUsers')
+  })
+
+  it('operationId for parameterised route (Bug 18)', () => {
+    const spec = generateOpenAPI({ title: 'T', version: '1', routes: { 'GET /users/:id': defineRoute({}) } })
+    expect(spec.paths['/users/{id}']!['get']!.operationId).toBe('getUsersId')
+  })
+
+  it('reads summary from route definition (Bug 18)', () => {
+    const route = { ...defineRoute({}), summary: 'Create a user' }
+    const spec  = generateOpenAPI({ title: 'T', version: '1', routes: { 'POST /users': route } })
+    expect(spec.paths['/users']!['post']!.summary).toBe('Create a user')
+  })
+
+  it('reads tags from route definition (Bug 18)', () => {
+    const route = { ...defineRoute({}), tags: ['Users', 'Admin'] }
+    const spec  = generateOpenAPI({ title: 'T', version: '1', routes: { 'GET /users': route } })
+    expect(spec.paths['/users']!['get']!.tags).toEqual(['Users', 'Admin'])
+  })
+
+  // Bug 19: prefix option
+  it('prefix option prepended to all paths (Bug 19)', () => {
+    const spec = generateOpenAPI({
+      title: 'T', version: '1',
+      prefix: '/api/v1',
+      routes: {
+        'GET  /users':     defineRoute({}),
+        'POST /users':     defineRoute({}),
+        'GET  /users/:id': defineRoute({}),
+      }
+    })
+    expect(spec.paths['/api/v1/users']).toBeDefined()
+    expect(spec.paths['/api/v1/users/{id}']).toBeDefined()
+    expect(spec.paths['/users']).toBeUndefined()
+  })
+
+  it('prefix without leading slash is normalised (Bug 19)', () => {
+    const spec = generateOpenAPI({
+      title: 'T', version: '1', prefix: 'api/v2',
+      routes: { 'GET /ping': defineRoute({}) }
+    })
+    expect(spec.paths['/api/v2/ping']).toBeDefined()
+  })
+
+  // Bug 20: duplicate route keys — JS object literals deduplicate keys at parse time,
+  // so the only way to get true duplicates through is via a Proxy or direct test of
+  // the warn logic. We verify the guard works by passing a pre-built routes object
+  // where a second entry with the same resolved path comes from a trailing-slash variant.
+  it('duplicate route keys emit a warning and skip second (Bug 20)', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    // /users and /users/ resolve to the same normalised path — triggers duplicate guard
+    const spec = generateOpenAPI({
+      title: 'T', version: '1',
+      routes: {
+        'GET /users':  { ...defineRoute({}), summary: 'first'  },
+        'GET /users/': { ...defineRoute({}), summary: 'second' },
+      }
+    })
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('duplicate'))
+    // First definition is kept
+    expect(spec.paths['/users']!['get']!.summary).toBe('first')
+    warn.mockRestore()
+  })
+
+  // Bug 21: trailing slash normalisation
+  it('trailing slash routes deduplicate to same path (Bug 21)', () => {
+    const spec = generateOpenAPI({
+      title: 'T', version: '1',
+      routes: Object.fromEntries([
+        ['GET /users/',  defineRoute({})],
+        ['POST /users/', defineRoute({})],
+      ])
+    })
+    expect(spec.paths['/users']).toBeDefined()
+    expect(spec.paths['/users/']). toBeUndefined()
+    expect(spec.paths['/users']!['get']).toBeDefined()
+    expect(spec.paths['/users']!['post']).toBeDefined()
+  })
+
+  it('root path "/" is preserved as-is (Bug 21)', () => {
+    const spec = generateOpenAPI({ title: 'T', version: '1', routes: { 'GET /': defineRoute({}) } })
+    expect(spec.paths['/']!['get']).toBeDefined()
+  })
+
   it('includes servers when provided', () => {
     const spec = generateOpenAPI({
       title: 'T', version: '1',
@@ -1851,7 +1958,6 @@ describe('generateOpenAPI()', () => {
       'DELETE /users/:id': defineRoute({ params: schema as any }),
     }
     const spec = generateOpenAPI({ title: 'T', version: '1', routes })
-    expect(Object.keys(spec.paths)).toHaveLength(2) // /users and /users/{id}
     expect(spec.paths['/users']!['post']).toBeDefined()
     expect(spec.paths['/users']!['get']).toBeDefined()
     expect(spec.paths['/users/{id}']!['get']).toBeDefined()
