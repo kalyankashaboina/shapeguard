@@ -82,6 +82,8 @@ One JSON object per event. Machine-readable. Ingest directly into Datadog, Cloud
 
 ## Request ID <a name="request-id"></a>
 
+[![Request ID tracing](../assets/shapeguard-request-id.svg)](../assets/shapeguard-request-id.svg)
+
 Every request gets a unique, time-ordered ID — `req_<timestamp_hex><random_hex>`.
 
 ```ts

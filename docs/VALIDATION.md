@@ -3,6 +3,8 @@
 > validate(), handle(), defineRoute(), createDTO(), schemas, types, pre-parse guards.
 
 ---
+[![Validation pipeline](../assets/shapeguard-validation-flow.svg)]
+
 
 ## Table of contents
 
@@ -546,6 +548,9 @@ validate({ body: yupAdapter(CreateUserSchema) })
 
 ## Per-route rate limiting — `rateLimit` <a name="ratelimit"></a>
 
+[![Rate limiting](../assets/shapeguard-rate-limit.svg)]
+
+
 > v0.3.0+ · No extra package needed
 
 Add `rateLimit` to any `defineRoute()` call:
@@ -585,6 +590,8 @@ The `retryAfter` field tells the client how many seconds until the window resets
 ---
 
 ## Per-route cache hints — `cache` <a name="cache"></a>
+
+[![Cache control](../assets/shapeguard-cache-control.svg)]
 
 > v0.3.0+ · Sets `Cache-Control` response header automatically
 

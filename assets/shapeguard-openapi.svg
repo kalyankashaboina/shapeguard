@@ -1,85 +1,66 @@
-<svg width="720" height="380" viewBox="0 0 720 380" xmlns="http://www.w3.org/2000/svg" font-family="'Segoe UI', system-ui, sans-serif">
-  <rect width="720" height="380" rx="14" fill="#0D1117"/>
+<svg width="920" height="240" viewBox="0 0 920 240" xmlns="http://www.w3.org/2000/svg">
   <defs>
-    <marker id="a" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L0,6 L8,3 z" fill="#1A6ECC"/></marker>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0d1117"/>
+      <stop offset="100%" stop-color="#161b22"/>
+    </linearGradient>
+    <marker id="arr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M0 0L10 5L0 10z" fill="#30363d"/>
+    </marker>
   </defs>
 
-  <!-- Title -->
-  <text x="360" y="36" text-anchor="middle" font-size="14" font-weight="700" fill="#E8F0FF">shapeguard — OpenAPI + Swagger UI</text>
+  <rect width="920" height="240" fill="url(#bg)" rx="14"/>
+  <rect width="920" height="240" fill="none" stroke="#21262d" stroke-width="1" rx="14"/>
 
-  <!-- Step 1: defineRoute -->
-  <rect x="30" y="58" width="190" height="240" rx="10" fill="#0A1628" stroke="#1A6ECC" stroke-width="1.5"/>
-  <rect x="30" y="58" width="190" height="28" rx="10" fill="#1A6ECC"/>
-  <rect x="30" y="72" width="190" height="14" fill="#1A6ECC"/>
-  <text x="125" y="76" text-anchor="middle" font-size="11" font-weight="700" fill="#FFF">1. defineRoute()</text>
-  <text x="44" y="104" font-size="8" fill="#4A88CC" font-family="monospace">const CreateRoute =</text>
-  <text x="44" y="118" font-size="8" fill="#4A88CC" font-family="monospace"> defineRoute({</text>
-  <text x="44" y="132" font-size="8" fill="#90C8FF" font-family="monospace">  body: CreateUserDTO,</text>
-  <text x="44" y="146" font-size="8" fill="#90C8FF" font-family="monospace">  response: UserSchema,</text>
-  <text x="44" y="160" font-size="8" fill="#90C8FF" font-family="monospace">  rateLimit: {</text>
-  <text x="44" y="174" font-size="8" fill="#90C8FF" font-family="monospace">   windowMs: 60_000,</text>
-  <text x="44" y="188" font-size="8" fill="#90C8FF" font-family="monospace">   max: 10</text>
-  <text x="44" y="202" font-size="8" fill="#90C8FF" font-family="monospace">  }</text>
-  <text x="44" y="216" font-size="8" fill="#4A88CC" font-family="monospace">})</text>
-  <text x="44" y="240" font-size="8" fill="#3A6899">// Same object used</text>
-  <text x="44" y="254" font-size="8" fill="#3A6899">// for validation AND</text>
-  <text x="44" y="268" font-size="8" fill="#3A6899">// for OpenAPI spec</text>
-  <text x="44" y="290" font-size="8" fill="#5A90C0">Zero duplication ✓</text>
+  <text x="460" y="28" text-anchor="middle" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="11" font-weight="500" fill="#8b949e" letter-spacing="2">generateOpenAPI() — ONE source of truth, always in sync</text>
 
-  <!-- Arrow 1→2 -->
-  <line x1="222" y1="178" x2="258" y2="178" stroke="#1A6ECC" stroke-width="1.5" marker-end="url(#a)"/>
+  <!-- step 1: defineRoute -->
+  <rect x="32" y="44" width="220" height="164" rx="10" fill="#0e1c0e" stroke="#3fb950" stroke-width="1"/>
+  <rect x="32" y="44" width="220" height="3" rx="2" fill="#3fb950"/>
+  <text x="142" y="65" text-anchor="middle" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="11" font-weight="700" fill="#56d364">defineRoute()</text>
+  <text x="52" y="86" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="10" fill="#6e7681">defineRoute({</text>
+  <text x="62" y="102" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="10" fill="#6e7681">  body: CreateUserDTO,</text>
+  <text x="62" y="118" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="10" fill="#6e7681">  response: UserSchema,</text>
+  <text x="62" y="134" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="10" font-weight="700" fill="#56d364">  tags: ['users'],</text>
+  <text x="62" y="150" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="10" font-weight="700" fill="#56d364">  summary: 'Create user',</text>
+  <text x="62" y="166" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="10" font-weight="700" fill="#56d364">  operationId: 'createUser'</text>
+  <text x="52" y="182" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="10" fill="#6e7681">})</text>
+  <text x="142" y="200" text-anchor="middle" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="9" fill="#484f58">schema IS the spec</text>
 
-  <!-- Step 2: generateOpenAPI -->
-  <rect x="260" y="58" width="200" height="240" rx="10" fill="#0A1628" stroke="#1A6ECC" stroke-width="1.5"/>
-  <rect x="260" y="58" width="200" height="28" rx="10" fill="#1A4E8F"/>
-  <rect x="260" y="72" width="200" height="14" fill="#1A4E8F"/>
-  <text x="360" y="76" text-anchor="middle" font-size="11" font-weight="700" fill="#FFF">2. generateOpenAPI()</text>
-  <text x="274" y="104" font-size="8" fill="#4A88CC" font-family="monospace">const spec =</text>
-  <text x="274" y="118" font-size="8" fill="#4A88CC" font-family="monospace"> generateOpenAPI({</text>
-  <text x="274" y="132" font-size="8" fill="#90C8FF" font-family="monospace">  title: 'My API',</text>
-  <text x="274" y="146" font-size="8" fill="#90C8FF" font-family="monospace">  version: '1.0.0',</text>
-  <text x="274" y="160" font-size="8" fill="#90C8FF" font-family="monospace">  routes: {</text>
-  <text x="274" y="174" font-size="8" fill="#7AB8F0" font-family="monospace">   'POST /users':</text>
-  <text x="274" y="188" font-size="8" fill="#7AB8F0" font-family="monospace">     CreateRoute,</text>
-  <text x="274" y="202" font-size="8" fill="#7AB8F0" font-family="monospace">   'GET /users/:id':</text>
-  <text x="274" y="216" font-size="8" fill="#7AB8F0" font-family="monospace">     GetRoute,</text>
-  <text x="274" y="230" font-size="8" fill="#90C8FF" font-family="monospace">  }</text>
-  <text x="274" y="244" font-size="8" fill="#4A88CC" font-family="monospace">})</text>
-  <text x="274" y="268" font-size="8" fill="#3A6899">// Returns OpenAPI 3.1</text>
-  <text x="274" y="282" font-size="8" fill="#3A6899">// JSON spec object</text>
+  <line x1="254" y1="126" x2="284" y2="126" stroke="#30363d" stroke-width="1.5" marker-end="url(#arr)"/>
 
-  <!-- Arrow 2→3 -->
-  <line x1="462" y1="178" x2="498" y2="178" stroke="#1A6ECC" stroke-width="1.5" marker-end="url(#a)"/>
+  <!-- step 2: generateOpenAPI box -->
+  <rect x="286" y="88" width="180" height="76" rx="10" fill="#0d1f38" stroke="#388bfd" stroke-width="1.5"/>
+  <text x="376" y="116" text-anchor="middle" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="12" font-weight="700" fill="#79c0ff">generateOpenAPI()</text>
+  <text x="376" y="134" text-anchor="middle" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="10" fill="#8b949e">reads Zod schemas</text>
+  <text x="376" y="150" text-anchor="middle" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="10" fill="#8b949e">builds spec auto</text>
 
-  <!-- Step 3: serve -->
-  <rect x="500" y="58" width="200" height="240" rx="10" fill="#0A1628" stroke="#1A6ECC" stroke-width="1.5"/>
-  <rect x="500" y="58" width="200" height="28" rx="10" fill="#0F3A6A"/>
-  <rect x="500" y="72" width="200" height="14" fill="#0F3A6A"/>
-  <text x="600" y="76" text-anchor="middle" font-size="11" font-weight="700" fill="#FFF">3. Serve it</text>
-  <text x="514" y="104" font-size="8" fill="#4A88CC" font-family="monospace">// Swagger UI</text>
-  <text x="514" y="118" font-size="8" fill="#90C8FF" font-family="monospace">app.use('/docs',</text>
-  <text x="514" y="132" font-size="8" fill="#90C8FF" font-family="monospace"> swaggerUi.serve,</text>
-  <text x="514" y="146" font-size="8" fill="#90C8FF" font-family="monospace"> swaggerUi.setup(spec))</text>
-  <text x="514" y="168" font-size="8" fill="#4A88CC" font-family="monospace">// Raw JSON</text>
-  <text x="514" y="182" font-size="8" fill="#90C8FF" font-family="monospace">app.get('/openapi.json',</text>
-  <text x="514" y="196" font-size="8" fill="#90C8FF" font-family="monospace"> (_, res) =></text>
-  <text x="514" y="210" font-size="8" fill="#90C8FF" font-family="monospace">   res.json(spec))</text>
-  <text x="514" y="238" font-size="8" fill="#3A9A3A">✓ Swagger UI at /docs</text>
-  <text x="514" y="254" font-size="8" fill="#3A9A3A">✓ Postman / Insomnia</text>
-  <text x="514" y="270" font-size="8" fill="#3A9A3A">✓ Auto-updated always</text>
+  <line x1="468" y1="126" x2="498" y2="126" stroke="#30363d" stroke-width="1.5" marker-end="url(#arr)"/>
 
-  <!-- Bottom caption -->
-  <text x="360" y="330" text-anchor="middle" font-size="10" fill="#4A6888">Your defineRoute() definitions are your documentation — no duplication, always in sync</text>
+  <!-- step 3: spec output -->
+  <rect x="500" y="44" width="196" height="164" rx="10" fill="#161b22" stroke="#388bfd" stroke-width="1"/>
+  <rect x="500" y="44" width="196" height="3" rx="2" fill="#388bfd"/>
+  <text x="598" y="65" text-anchor="middle" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="11" font-weight="700" fill="#79c0ff">OpenAPI 3.1 spec</text>
+  <text x="518" y="86" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="9.5" fill="#6e7681">openapi: 3.1.0</text>
+  <text x="518" y="102" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="9.5" fill="#6e7681">paths:</text>
+  <text x="526" y="118" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="9.5" fill="#6e7681">/users:</text>
+  <text x="534" y="134" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="9.5" fill="#6e7681">  post:</text>
+  <text x="542" y="150" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="9.5" fill="#79c0ff">    tags: [users]</text>
+  <text x="542" y="166" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="9.5" fill="#79c0ff">    summary: Create user</text>
+  <text x="542" y="182" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="9.5" fill="#6e7681">    requestBody: …</text>
+  <text x="542" y="198" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="9.5" fill="#6e7681">    responses: …</text>
 
-  <!-- What gets generated bullets -->
-  <rect x="30" y="312" width="660" height="44" rx="8" fill="#0A1628" stroke="#1A4E8F" stroke-width="1"/>
-  <text x="60" y="330" font-size="9" fill="#90C8FF">From body: →</text>
-  <text x="120" y="330" font-size="9" fill="#CCC">requestBody schema</text>
-  <text x="230" y="330" font-size="9" fill="#90C8FF">From params: →</text>
-  <text x="296" y="330" font-size="9" fill="#CCC">path parameters</text>
-  <text x="400" y="330" font-size="9" fill="#90C8FF">From query: →</text>
-  <text x="460" y="330" font-size="9" fill="#CCC">query parameters</text>
-  <text x="558" y="330" font-size="9" fill="#90C8FF">From response: →</text>
-  <text x="632" y="330" font-size="9" fill="#CCC">200 schema</text>
-  <text x="60" y="348" font-size="9" fill="#4A6888">Always included: 422 Validation Error · 429 Rate Limit Exceeded · 500 Internal Error</text>
+  <line x1="698" y1="126" x2="728" y2="126" stroke="#30363d" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- step 4: swagger ui -->
+  <rect x="730" y="80" width="158" height="92" rx="10" fill="#0e1c0e" stroke="#3fb950" stroke-width="1.5"/>
+  <rect x="730" y="80" width="158" height="3" rx="2" fill="#3fb950"/>
+  <text x="809" y="106" text-anchor="middle" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="12" font-weight="700" fill="#56d364">Swagger UI</text>
+  <text x="809" y="124" text-anchor="middle" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="10" fill="#8b949e">app.get('/docs',</text>
+  <text x="809" y="140" text-anchor="middle" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="10" fill="#8b949e">  swaggerUi(spec))</text>
+  <text x="809" y="158" text-anchor="middle" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="10" fill="#3fb950">served instantly</text>
+
+  <!-- bottom warning -->
+  <rect x="32" y="218" width="856" height="14" rx="4" fill="#1c1105" stroke="#d29922" stroke-width="0.5"/>
+  <text x="460" y="228" text-anchor="middle" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="9.5" fill="#e3b341">Change your Zod schema → docs update automatically · Zero JSDoc · Zero drift</text>
 </svg>

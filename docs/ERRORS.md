@@ -24,6 +24,8 @@
 
 ## Two types of errors <a name="two-types"></a>
 
+[![Error types](../assets/shapeguard-error-types.svg)]
+
 ```
 OPERATIONAL                         PROGRAMMER
 ────────────────────────────────    ────────────────────────────────

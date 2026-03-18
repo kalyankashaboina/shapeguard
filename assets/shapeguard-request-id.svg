@@ -1,0 +1,73 @@
+<svg width="920" height="230" viewBox="0 0 920 230" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0d1117"/>
+      <stop offset="100%" stop-color="#161b22"/>
+    </linearGradient>
+    <marker id="arr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M0 0L10 5L0 10z" fill="#30363d"/>
+    </marker>
+  </defs>
+
+  <rect width="920" height="230" fill="url(#bg)" rx="14"/>
+  <rect width="920" height="230" fill="none" stroke="#21262d" stroke-width="1" rx="14"/>
+
+  <text x="460" y="28" text-anchor="middle" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="11" font-weight="500" fill="#8b949e" letter-spacing="2">REQUEST ID — time-ordered, traces any bug in seconds</text>
+
+  <!-- flow boxes -->
+  <rect x="32" y="44" width="130" height="62" rx="8" fill="#161b22" stroke="#30363d" stroke-width="1"/>
+  <text x="97" y="70" text-anchor="middle" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="11" fill="#8b949e">Client sends</text>
+  <text x="97" y="86" text-anchor="middle" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="11" font-weight="600" fill="#e6edf3">POST /users</text>
+
+  <line x1="164" y1="75" x2="192" y2="75" stroke="#30363d" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <rect x="194" y="44" width="210" height="62" rx="8" fill="#0d1f38" stroke="#388bfd" stroke-width="1"/>
+  <text x="299" y="68" text-anchor="middle" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="11" fill="#8b949e">shapeguard() generates</text>
+  <text x="299" y="84" text-anchor="middle" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="10" font-weight="600" fill="#79c0ff">req_019ce57088b6ebbb</text>
+  <text x="299" y="98" text-anchor="middle" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="9" fill="#484f58">timestamp_hex + random_hex</text>
+
+  <line x1="406" y1="75" x2="434" y2="75" stroke="#30363d" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <rect x="436" y="44" width="190" height="62" rx="8" fill="#161b22" stroke="#30363d" stroke-width="1"/>
+  <text x="531" y="68" text-anchor="middle" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="11" fill="#8b949e">every log stamped</text>
+  <text x="531" y="84" text-anchor="middle" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="10" fill="#e3b341">[req_019ce570...]</text>
+  <text x="531" y="98" text-anchor="middle" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="9" fill="#484f58">on every line</text>
+
+  <line x1="628" y1="75" x2="656" y2="75" stroke="#30363d" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <rect x="658" y="44" width="228" height="62" rx="8" fill="#0e1c0e" stroke="#3fb950" stroke-width="1"/>
+  <text x="772" y="68" text-anchor="middle" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="11" fill="#8b949e">X-Request-Id header</text>
+  <text x="772" y="84" text-anchor="middle" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="10" font-weight="600" fill="#56d364">sent on every response</text>
+  <text x="772" y="98" text-anchor="middle" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="9" fill="#484f58">client can correlate</text>
+
+  <!-- terminal output -->
+  <rect x="32" y="122" width="856" height="94" rx="10" fill="#010409" stroke="#21262d" stroke-width="1"/>
+  <!-- dot row -->
+  <circle cx="52" cy="138" r="5" fill="#f85149"/>
+  <circle cx="68" cy="138" r="5" fill="#e3b341"/>
+  <circle cx="84" cy="138" r="5" fill="#3fb950"/>
+
+  <text x="110" y="138" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="9.5" fill="#484f58">shapeguard log output</text>
+
+  <text x="52" y="157" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="10.5" fill="#484f58">09:44:57  </text>
+  <text x="112" y="157" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="10.5" fill="#22d3ee">[DEBUG]</text>
+  <text x="170" y="157" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="10.5" fill="#6e7681">  &gt;&gt;  POST    /api/v1/users               </text>
+  <text x="530" y="157" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="10.5" fill="#388bfd">[req_019ce57088b6...]</text>
+
+  <text x="52" y="175" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="10.5" fill="#484f58">09:44:57  </text>
+  <text x="112" y="175" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="10.5" fill="#3fb950">[INFO] </text>
+  <text x="170" y="175" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="10.5" fill="#6e7681">  &lt;&lt;  201  POST    /api/v1/users     2ms   </text>
+  <text x="530" y="175" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="10.5" fill="#388bfd">[req_019ce57088b6...]</text>
+
+  <text x="52" y="193" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="10.5" fill="#484f58">09:44:59  </text>
+  <text x="112" y="193" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="10.5" fill="#f85149">[ERROR]</text>
+  <text x="170" y="193" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="10.5" fill="#6e7681">  &lt;&lt;  500  GET     /api/v1/crash     1ms   </text>
+  <text x="530" y="193" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="10.5" fill="#388bfd">[req_019ce57088b6...]</text>
+  <text x="748" y="193" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="9.5" fill="#f85149"> ← grep → full trace</text>
+
+  <text x="52" y="211" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="10.5" fill="#484f58">09:44:58  </text>
+  <text x="112" y="211" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="10.5" fill="#e3b341">[WARN] </text>
+  <text x="170" y="211" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="10.5" fill="#6e7681">  &lt;&lt;  200  GET     /api/v1/data   1523ms  </text>
+  <text x="530" y="211" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="10.5" fill="#388bfd">[req_019ce57088b6...]  </text>
+  <text x="748" y="211" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="10" fill="#e3b341">SLOW</text>
+</svg>
