@@ -12,6 +12,7 @@
 - [Request ID](#request-id)
 - [Body logging](#body-logging)
 - [Default redaction](#redaction)
+- [Logger output options](#output-options)
 - [Bring your own logger](#byol)
 - [Full config reference](#config)
 - [JSON payload fields](#payloads)
@@ -71,7 +72,11 @@ One JSON object per event. Machine-readable. Ingest directly into Datadog, Cloud
 | `level` | `debug` | `warn` |
 | `pretty` | `true` | `false` (JSON) |
 | `logAllRequests` | `true` | `false` (errors + slow only) |
-| `slowThreshold` | `0` (disabled) | `1000` ms |
+| `logIncoming` | `true` | `true` |
+| `shortRequestId` | `false` | `false` |
+| `logClientIp` | `false` | `false` |
+| `lineColor` | `'method'` | `'method'` |
+| `slowThreshold` | `500` ms | `1000` ms |
 
 ---
 
@@ -184,6 +189,78 @@ app.use(shapeguard({
 
 ---
 
+---
+
+## Logger output options <a name="output-options"></a>
+
+Four independent options added in v0.6.0 for precise control over what appears in your terminal and log files. Every option defaults to the existing behaviour — nothing changes until you opt in.
+
+### logIncoming
+
+Hides the `>>` request arrival lines while keeping `<<` response lines. Useful in busy terminals where you only care about response times and status codes.
+
+```ts
+app.use(shapeguard({ logger: { logIncoming: false } }))
+
+// Before:
+// 09:44:57  [DEBUG]  >>  POST    /api/v1/users               [req_019c...]
+// 09:44:57  [INFO]   <<  201  POST    /api/v1/users   2ms    [req_019c...]
+
+// After:
+// 09:44:57  [INFO]   <<  201  POST    /api/v1/users   2ms    [req_019c...]
+```
+
+### shortRequestId
+
+Shows only the last 8 characters of the request ID on log lines. The full ID is still generated and forwarded in the `X-Request-Id` response header — only the terminal display is shortened.
+
+```ts
+app.use(shapeguard({ logger: { shortRequestId: true } }))
+
+// Before: [req_019cfa6f23691913c86c63a3045a]
+// After:  [3a3045a]
+```
+
+### logClientIp
+
+Logs the client IP address on each response line. Reads `x-forwarded-for` first (for apps behind a load balancer or proxy), then falls back to `socket.remoteAddress`. The IP is also included in the structured JSON payload as the `ip` field.
+
+```ts
+app.use(shapeguard({ logger: { logClientIp: true } }))
+
+// 09:44:57  [INFO]  <<  201  POST  /api/v1/users  2ms  [req_...]  192.168.1.100
+```
+
+### lineColor
+
+Controls how the log line is coloured in dev/pretty mode. The default `'method'` colours by HTTP verb. Setting `'level'` colours the entire line by the response status — the same colour that the level badge uses.
+
+```ts
+app.use(shapeguard({ logger: { lineColor: 'level' } }))
+
+// 'method' (default): GET=green  POST=cyan   DELETE=red   (coloured by verb)
+// 'level':            2xx=green  4xx=yellow  5xx=red      (coloured by status)
+```
+
+Only affects dev/pretty output. JSON prod logs are unaffected.
+
+### Combining all four
+
+All four options are fully independent and can be combined freely:
+
+```ts
+app.use(shapeguard({
+  logger: {
+    logIncoming:    false,    // cleaner terminal
+    shortRequestId: true,     // less ID noise
+    logClientIp:    true,     // see who's hitting each route
+    lineColor:      'level',  // colour by result not verb
+  }
+}))
+```
+
+---
+
 ## Bring your own logger <a name="byol"></a>
 
 Any logger with `{ info, warn, error, debug }` methods works:
@@ -195,9 +272,12 @@ app.use(shapeguard({ logger: { instance: logger } }))
 ```
 
 ```ts
+// Winston — use the built-in adapter (v0.4.0+)
 import winston from 'winston'
-const logger = winston.createLogger({ transports: [new winston.transports.Console()] })
-app.use(shapeguard({ logger: { instance: logger } }))
+import { winstonAdapter } from 'shapeguard/adapters/winston'
+
+const wLogger = winston.createLogger({ transports: [new winston.transports.Console()] })
+app.use(shapeguard({ logger: { instance: winstonAdapter(wLogger) } }))
 ```
 
 When `instance` is provided, all other logger options (`level`, `pretty`, `redact`, etc.) are ignored — you manage the logger entirely.
@@ -222,10 +302,27 @@ app.use(shapeguard({
     // (default: true in dev, false in prod)
     logAllRequests: false,
 
+    // Show >> arrival lines (default: true)
+    // Set false to hide arrival lines and keep only << response lines
+    logIncoming: false,
+
     // Show [req_id] on every log line (default: true)
     logRequestId: true,
 
-    // SLOW warning if response >= N ms (default: 0=disabled in dev, 1000 in prod)
+    // Show only last 8 characters of request ID — less terminal noise
+    // Full ID still generated and forwarded in headers (default: false)
+    shortRequestId: true,
+
+    // Log client IP on each response line (default: false)
+    // Reads x-forwarded-for first, then socket.remoteAddress
+    logClientIp: true,
+
+    // Line colour mode (default: 'method')
+    // 'method' — GET=green, POST=cyan, DELETE=red (default)
+    // 'level'  — 2xx=green, 4xx=yellow, 5xx=red
+    lineColor: 'level',
+
+    // SLOW warning if response >= N ms (default: 500ms in dev, 1000 in prod)
     slowThreshold: 1000,
 
     // Include request body in logs — off by default (security risk)

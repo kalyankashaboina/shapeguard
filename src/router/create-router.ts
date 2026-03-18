@@ -97,6 +97,26 @@ export function createRouter(opts?: RouterOptions): Router {
           return (target[prop as keyof Router] as Function)(path, ...handlers)
         }
       }
+
+      // Intercept router.route(path) — returns a chainable object whose
+      // HTTP verb methods must also be tracked for 405 to work correctly.
+      if (prop === 'route') {
+        return function(path: string) {
+          const routeObj = (target.route as Function)(path)
+          // Wrap every HTTP verb on the returned route object
+          for (const verb of HTTP_VERBS) {
+            const original = routeObj[verb]?.bind(routeObj)
+            if (typeof original === 'function') {
+              routeObj[verb] = function(...args: unknown[]) {
+                track(path, verb)
+                return original(...args)
+              }
+            }
+          }
+          return routeObj
+        }
+      }
+
       return target[prop as keyof Router]
     },
   }) as Router

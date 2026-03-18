@@ -1,7 +1,12 @@
 // src/__tests__/logging/request-log.test.ts
 import { describe, it, expect, vi } from 'vitest'
 import { requestLogger } from '../../logging/request-log.js'
+import { createLogger } from '../../logging/logger.js'
+import { winstonAdapter } from '../../adapters/winston.js'
+import { withShape } from '../../router/with-shape.js'
+import { shapeguard } from '../../shapeguard.js'
 import type { Logger } from '../../types/index.js'
+import type { Request, Response, NextFunction } from 'express'
 
 function makeLogger() {
   const calls: Record<string, unknown[][]> = { debug: [], info: [], warn: [], error: [] }
@@ -297,4 +302,385 @@ describe('requestLogger', () => {
     })
   })
 
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Bug 11: Logger instance missing methods — validated at mount time
+// ─────────────────────────────────────────────────────────────────────────────
+describe('createLogger — instance validation (Bug 11)', () => {
+  it('accepts a valid instance with all four methods', () => {
+    const instance: Logger = {
+      debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn(),
+    }
+    expect(() => createLogger({ instance })).not.toThrow()
+  })
+
+  it('throws a clear error when debug() is missing', () => {
+    const bad = { info: vi.fn(), warn: vi.fn(), error: vi.fn() }
+    expect(() => createLogger({ instance: bad as unknown as Logger }))
+      .toThrow('[shapeguard] logger.instance is missing required method(s): debug')
+  })
+
+  it('throws listing ALL missing methods', () => {
+    const bad = { info: vi.fn() }
+    expect(() => createLogger({ instance: bad as unknown as Logger }))
+      .toThrow('debug, warn, error')
+  })
+
+  it('mentions the winston adapter in the error message', () => {
+    const bad = { info: vi.fn() }
+    expect(() => createLogger({ instance: bad as unknown as Logger }))
+      .toThrow('shapeguard/adapters/winston')
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Bug 12: withShape warns in dev when token resolves to undefined
+// ─────────────────────────────────────────────────────────────────────────────
+describe('withShape — undefined token warning (Bug 12)', () => {
+  function makeReq(): Request {
+    return {} as unknown as Request
+  }
+
+  function makeRes(body: unknown) {
+    let captured: unknown
+    const res = {
+      headersSent: false,
+      json(b: unknown) { captured = b; return this },
+      get captured() { return captured },
+    }
+    return res as unknown as Response & { captured: unknown }
+  }
+
+  it('warns when a token path does not exist in response', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const mw   = withShape({ missing: '{data.notHere}' })
+    const res  = makeRes({ success: true, data: { ok: true } })
+
+    mw(makeReq(), res, vi.fn() as unknown as NextFunction)
+    ;(res as any).json({ success: true, data: { ok: true } })
+
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining('withShape'),
+    )
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining('missing'),
+    )
+    warn.mockRestore()
+  })
+
+  it('does not warn when token resolves successfully', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const mw   = withShape({ ok: '{data.ok}' })
+    const res  = makeRes(null)
+
+    mw(makeReq(), res, vi.fn() as unknown as NextFunction)
+    ;(res as any).json({ success: true, data: { ok: true } })
+
+    expect(warn).not.toHaveBeenCalled()
+    warn.mockRestore()
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Bug 13: Two shapeguard() instances do not share config
+// ─────────────────────────────────────────────────────────────────────────────
+describe('shapeguard() — two instances do not share config (Bug 13)', () => {
+  function makeReqRes(validationConfig: Record<string, unknown>) {
+    const req = {
+      headers: {}, method: 'GET', path: '/', id: 'x',
+    } as unknown as Request
+    const locals: Record<string, unknown> = {}
+    const res = {
+      locals,
+      headersSent: false,
+      setHeader: vi.fn(),
+      json: vi.fn(),
+      once: vi.fn(),
+    } as unknown as Response
+    return { req, res }
+  }
+
+  it('each instance writes its own validationConfig to res.locals', () => {
+    const mw1 = shapeguard({ validation: { strings: { trim: true } }, logger: { silent: true } })
+    const mw2 = shapeguard({ validation: { strings: { lowercase: true } }, logger: { silent: true } })
+
+    const { req: req1, res: res1 } = makeReqRes({})
+    const { req: req2, res: res2 } = makeReqRes({})
+    const next = vi.fn()
+
+    mw1(req1, res1, next)
+    mw2(req2, res2, next)
+
+    const cfg1 = (res1.locals as any)['__sg_validation_config__']
+    const cfg2 = (res2.locals as any)['__sg_validation_config__']
+
+    expect(cfg1?.strings?.trim).toBe(true)
+    expect(cfg1?.strings?.lowercase).toBeUndefined()
+    expect(cfg2?.strings?.lowercase).toBe(true)
+    expect(cfg2?.strings?.trim).toBeUndefined()
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Bug 14: Winston adapter
+// ─────────────────────────────────────────────────────────────────────────────
+describe('winstonAdapter (Bug 14)', () => {
+  function makeWinston() {
+    return {
+      debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn(),
+    }
+  }
+
+  it('returns a Logger-shaped object', () => {
+    const w      = makeWinston()
+    const logger = winstonAdapter(w)
+    expect(typeof logger.debug).toBe('function')
+    expect(typeof logger.info).toBe('function')
+    expect(typeof logger.warn).toBe('function')
+    expect(typeof logger.error).toBe('function')
+  })
+
+  it('flips argument order: shapeguard calls (obj, msg), winston receives (msg, obj)', () => {
+    const w      = makeWinston()
+    const logger = winstonAdapter(w)
+    const meta   = { requestId: 'abc', status: 200 }
+    const msg    = 'request completed'
+
+    logger.info(meta, msg)
+
+    expect(w.info).toHaveBeenCalledWith(msg, meta)
+  })
+
+  it('passes empty string when msg is undefined', () => {
+    const w      = makeWinston()
+    const logger = winstonAdapter(w)
+    logger.warn({ code: 'TEST' })
+    expect(w.warn).toHaveBeenCalledWith('', { code: 'TEST' })
+  })
+
+  it('wraps all four levels correctly', () => {
+    const w      = makeWinston()
+    const logger = winstonAdapter(w)
+    logger.debug({ a: 1 }, 'dbg')
+    logger.info ({ b: 2 }, 'inf')
+    logger.warn ({ c: 3 }, 'wrn')
+    logger.error({ d: 4 }, 'err')
+    expect(w.debug).toHaveBeenCalledWith('dbg', { a: 1 })
+    expect(w.info ).toHaveBeenCalledWith('inf', { b: 2 })
+    expect(w.warn ).toHaveBeenCalledWith('wrn', { c: 3 })
+    expect(w.error).toHaveBeenCalledWith('err', { d: 4 })
+  })
+
+  it('throws a clear error when passed an invalid logger', () => {
+    const bad = { info: vi.fn() }
+    expect(() => winstonAdapter(bad as any))
+      .toThrow('[shapeguard] winstonAdapter')
+  })
+
+  it('is accepted by createLogger({ instance }) without throwing', () => {
+    const w      = makeWinston()
+    const logger = winstonAdapter(w)
+    expect(() => createLogger({ instance: logger })).not.toThrow()
+  })
+})
+// ─────────────────────────────────────────────────────────────────────────────
+// v0.6.0 logger features — logIncoming, shortRequestId, logClientIp, lineColor
+// ─────────────────────────────────────────────────────────────────────────────
+
+function makeFullReq(overrides: Record<string, unknown> = {}) {
+  return {
+    id: 'req_019cfa6f23691913c86c63a3045a',
+    method: 'GET',
+    path: '/users',
+    originalUrl: '/users',
+    route: { path: '/users' },
+    baseUrl: '',
+    body: {},
+    headers: {},
+    ip: '192.168.1.100',
+    socket: { remoteAddress: '192.168.1.100' },
+    ...overrides,
+  } as any
+}
+
+function makeSimpleRes(statusCode = 200) {
+  const handlers: Record<string, Function> = {}
+  return {
+    statusCode,
+    once(event: string, fn: Function) { handlers[event] = fn },
+    json: (b: unknown) => b,
+    _emit() { handlers['finish']?.() },
+  } as any
+}
+
+describe('logIncoming: false — hides >> arrival lines (v0.6.0)', () => {
+  it('suppresses incoming debug log when logIncoming is false', () => {
+    const l   = makeLogger()
+    const mw  = requestLogger(l, { logAllRequests: true, logIncoming: false })
+    const req = makeFullReq()
+    const res = makeRes(200)
+    mw(req, res, vi.fn())
+    expect(l.calls['debug']).toHaveLength(0)
+  })
+
+  it('still logs response << line when logIncoming is false', () => {
+    const l   = makeLogger()
+    const mw  = requestLogger(l, { logAllRequests: true, logIncoming: false, slowThreshold: 0 })
+    const req = makeFullReq()
+    const res = makeRes(200)
+    mw(req, res, vi.fn())
+    res._emit()
+    expect(l.calls['info']).toHaveLength(1)
+  })
+
+  it('shows incoming lines by default (logIncoming not set)', () => {
+    const l   = makeLogger()
+    const mw  = requestLogger(l, { logAllRequests: true })
+    const req = makeFullReq()
+    const res = makeRes(200)
+    mw(req, res, vi.fn())
+    expect(l.calls['debug']).toHaveLength(1)
+  })
+})
+
+describe('shortRequestId: true — last 8 chars only (v0.6.0)', () => {
+  it('shows only last 8 chars of request ID in incoming line', () => {
+    const l   = makeLogger()
+    const mw  = requestLogger(l, { logAllRequests: true, shortRequestId: true })
+    const req = makeFullReq()
+    const res = makeRes(200)
+    mw(req, res, vi.fn())
+    const msg = l.calls['debug']![0]![1] as string
+    // last 8 chars of 'req_019cfa6f23691913c86c63a3045a'
+    expect(msg).toContain('3045a')
+    expect(msg).not.toContain('req_019cfa6f23691913c86c63a3045a')
+  })
+
+  it('shows only last 8 chars in response line', () => {
+    const l   = makeLogger()
+    const mw  = requestLogger(l, { logAllRequests: true, shortRequestId: true, slowThreshold: 0 })
+    const req = makeFullReq()
+    const res = makeRes(200)
+    mw(req, res, vi.fn())
+    res._emit()
+    const msg = l.calls['info']![0]![1] as string
+    expect(msg).toContain('3045a')
+    expect(msg).not.toContain('req_019cfa6f23691913c86c63a3045a')
+  })
+
+  it('shows full ID when shortRequestId is false (default)', () => {
+    const l   = makeLogger()
+    const mw  = requestLogger(l, { logAllRequests: true })
+    const req = makeFullReq()
+    const res = makeRes(200)
+    mw(req, res, vi.fn())
+    const msg = l.calls['debug']![0]![1] as string
+    expect(msg).toContain('req_019cfa6f23691913c86c63a3045a')
+  })
+})
+
+describe('logClientIp: true — logs IP on response lines (v0.6.0)', () => {
+  it('includes IP in response payload when logClientIp is true', () => {
+    const l   = makeLogger()
+    const mw  = requestLogger(l, { logAllRequests: true, logClientIp: true, slowThreshold: 0 })
+    const req = makeFullReq()
+    const res = makeRes(200)
+    mw(req, res, vi.fn())
+    res._emit()
+    const payload = l.calls['info']![0]![0] as any
+    expect(payload.ip).toBe('192.168.1.100')
+  })
+
+  it('includes IP in response message string', () => {
+    const l   = makeLogger()
+    const mw  = requestLogger(l, { logAllRequests: true, logClientIp: true, slowThreshold: 0 })
+    const req = makeFullReq()
+    const res = makeRes(200)
+    mw(req, res, vi.fn())
+    res._emit()
+    const msg = l.calls['info']![0]![1] as string
+    expect(msg).toContain('192.168.1.100')
+  })
+
+  it('reads x-forwarded-for first when present', () => {
+    const l   = makeLogger()
+    const mw  = requestLogger(l, { logAllRequests: true, logClientIp: true, slowThreshold: 0 })
+    const req = makeFullReq({ headers: { 'x-forwarded-for': '10.0.0.1, 10.0.0.2' } })
+    const res = makeRes(200)
+    mw(req, res, vi.fn())
+    res._emit()
+    const payload = l.calls['info']![0]![0] as any
+    expect(payload.ip).toBe('10.0.0.1')
+  })
+
+  it('does not include IP when logClientIp is false (default)', () => {
+    const l   = makeLogger()
+    const mw  = requestLogger(l, { logAllRequests: true, slowThreshold: 0 })
+    const req = makeFullReq()
+    const res = makeRes(200)
+    mw(req, res, vi.fn())
+    res._emit()
+    const payload = l.calls['info']![0]![0] as any
+    expect(payload.ip).toBeUndefined()
+  })
+})
+
+describe("lineColor: 'level' — whole line coloured by status (v0.6.0)", () => {
+  it("lineColor:'level' still produces a response log line", () => {
+    const l   = makeLogger()
+    const mw  = requestLogger(l, { logAllRequests: true, lineColor: 'level', slowThreshold: 0 })
+    const req = makeFullReq()
+    const res = makeRes(200)
+    mw(req, res, vi.fn())
+    res._emit()
+    expect(l.calls['info']).toHaveLength(1)
+  })
+
+  it("lineColor:'level' response line contains method and status", () => {
+    const l   = makeLogger()
+    const mw  = requestLogger(l, { logAllRequests: true, lineColor: 'level', slowThreshold: 0 })
+    const req = makeFullReq()
+    const res = makeRes(201)
+    mw(req, res, vi.fn())
+    res._emit()
+    const msg = l.calls['info']![0]![1] as string
+    expect(msg).toContain('GET')
+    expect(msg).toContain('201')
+  })
+
+  it("lineColor:'method' (default) works unchanged", () => {
+    const l   = makeLogger()
+    const mw  = requestLogger(l, { logAllRequests: true, lineColor: 'method', slowThreshold: 0 })
+    const req = makeFullReq()
+    const res = makeRes(200)
+    mw(req, res, vi.fn())
+    res._emit()
+    expect(l.calls['info']).toHaveLength(1)
+  })
+
+  it('all 4 new options can be combined together', () => {
+    const l   = makeLogger()
+    const mw  = requestLogger(l, {
+      logAllRequests:  true,
+      logIncoming:     false,   // hide >> lines
+      shortRequestId:  true,    // last 8 chars
+      logClientIp:     true,    // show IP
+      lineColor:       'level', // colour by status
+      slowThreshold:   0,
+    })
+    const req = makeFullReq()
+    const res = makeRes(200)
+    mw(req, res, vi.fn())
+    res._emit()
+    // no incoming line
+    expect(l.calls['debug']).toHaveLength(0)
+    // response line present with IP and short ID
+    expect(l.calls['info']).toHaveLength(1)
+    const msg     = l.calls['info']![0]![1] as string
+    const payload = l.calls['info']![0]![0] as any
+    expect(msg).toContain('3045a')
+    expect(msg).toContain('192.168.1.100')
+    expect(payload.ip).toBe('192.168.1.100')
+  })
 })

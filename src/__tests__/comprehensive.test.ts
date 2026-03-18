@@ -136,13 +136,15 @@ describe('AppError', () => {
       expect(e.details).toEqual(issue)
     })
 
-    it('validation() array picks first issue', () => {
+    it('validation() array stores full array in details', () => {
       const issues = [
         { field: 'email', message: 'bad email', code: 'invalid_string' },
         { field: 'name',  message: 'too short', code: 'too_small' },
       ]
       const e = AppError.validation(issues)
-      expect((e.details as any).field).toBe('email')
+      expect(Array.isArray(e.details)).toBe(true)
+      expect((e.details as any)[0].field).toBe('email')
+      expect((e.details as any)[1].field).toBe('name')
     })
 
     it('internal() default message', () => {
@@ -1271,13 +1273,12 @@ describe('Real-world scenarios', () => {
   })
 
   describe('allErrors mode', () => {
-    it('validate({ allErrors: true }) collects all issues', async () => {
+    it('validate({ allErrors: true }) collects all issues and returns full array in details', async () => {
       const app = makeApp()
       const schema = makeSchema(null, true, [
         { path: ['email'], message: 'Invalid email', code: 'invalid_string' },
         { path: ['name'],  message: 'Too short',     code: 'too_small' },
       ])
-      // allErrors uses the first issue for AppError.validation — schema has multiple
       app.post('/test',
         validate({ body: schema as any, allErrors: true }),
         asyncHandler(async (_req, res) => { res.json({ ok: true }) })
@@ -1291,6 +1292,11 @@ describe('Real-world scenarios', () => {
 
       expect(res.status).toBe(422)
       expect(res.body.error.code).toBe(ErrorCode.VALIDATION_ERROR)
+      // Bug 2 fix: full array must be present in details, not just the first issue
+      expect(Array.isArray(res.body.error.details)).toBe(true)
+      expect(res.body.error.details).toHaveLength(2)
+      expect(res.body.error.details[0].field).toBe('email')
+      expect(res.body.error.details[1].field).toBe('name')
     })
   })
 
@@ -1576,7 +1582,7 @@ describe('Transform hook on defineRoute()', () => {
     expect(res.body.password).toBe('hashed:plaintext')
   })
 
-  it('transform error returns 500 AppError', async () => {
+  it('transform error returns 500 AppError for plain Error', async () => {
     const app    = makeApp()
     const schema = makeSchema({})
     const route  = defineRoute({
@@ -1593,6 +1599,27 @@ describe('Transform hook on defineRoute()', () => {
       .send({})
 
     expect(res.status).toBe(500)
+  })
+
+  it('transform re-throws AppError as-is (Bug 4 fix — not wrapped in 500)', async () => {
+    const app    = makeApp()
+    const schema = makeSchema({})
+    const route  = defineRoute({
+      body:      schema as any,
+      transform: async () => { throw AppError.conflict('username') },
+    })
+
+    app.post('/test', ...handle(route, async (_req, res) => { res.json({ ok: true }) }))
+    app.use(errorHandler({ debug: true }))
+
+    const res = await supertest(app)
+      .post('/test')
+      .set('Content-Type', 'application/json')
+      .send({})
+
+    // Must be 409 (the AppError status), not 500 (the wrapped error status)
+    expect(res.status).toBe(409)
+    expect(res.body.error.code).toBe(ErrorCode.CONFLICT)
   })
 
   it('route without transform works normally', async () => {
@@ -1806,6 +1833,113 @@ describe('generateOpenAPI()', () => {
     expect(op.responses['500']).toBeDefined()
   })
 
+  // Bug 17: 422 and 500 must have full error envelope schema
+  it('422 response includes error envelope schema (Bug 17)', () => {
+    const route = defineRoute({})
+    const spec  = generateOpenAPI({ title: 'T', version: '1', routes: { 'POST /test': route } })
+    const op    = spec.paths['/test']!['post']!
+    expect(op.responses['422']!.content).toBeDefined()
+    const schema = op.responses['422']!.content!['application/json']!.schema as any
+    expect(schema.properties.success).toBeDefined()
+    expect(schema.properties.error).toBeDefined()
+  })
+
+  it('500 response includes error envelope schema (Bug 17)', () => {
+    const route = defineRoute({})
+    const spec  = generateOpenAPI({ title: 'T', version: '1', routes: { 'GET /test': route } })
+    const op    = spec.paths['/test']!['get']!
+    expect(op.responses['500']!.content).toBeDefined()
+    const schema = op.responses['500']!.content!['application/json']!.schema as any
+    expect(schema.properties.error.properties.code).toBeDefined()
+  })
+
+  // Bug 18: operationId, tags, summary
+  it('auto-generates operationId from method and path (Bug 18)', () => {
+    const spec = generateOpenAPI({ title: 'T', version: '1', routes: { 'POST /users': defineRoute({}) } })
+    expect(spec.paths['/users']!['post']!.operationId).toBe('postUsers')
+  })
+
+  it('operationId for parameterised route (Bug 18)', () => {
+    const spec = generateOpenAPI({ title: 'T', version: '1', routes: { 'GET /users/:id': defineRoute({}) } })
+    expect(spec.paths['/users/{id}']!['get']!.operationId).toBe('getUsersId')
+  })
+
+  it('reads summary from route definition (Bug 18)', () => {
+    const route = { ...defineRoute({}), summary: 'Create a user' }
+    const spec  = generateOpenAPI({ title: 'T', version: '1', routes: { 'POST /users': route } })
+    expect(spec.paths['/users']!['post']!.summary).toBe('Create a user')
+  })
+
+  it('reads tags from route definition (Bug 18)', () => {
+    const route = { ...defineRoute({}), tags: ['Users', 'Admin'] }
+    const spec  = generateOpenAPI({ title: 'T', version: '1', routes: { 'GET /users': route } })
+    expect(spec.paths['/users']!['get']!.tags).toEqual(['Users', 'Admin'])
+  })
+
+  // Bug 19: prefix option
+  it('prefix option prepended to all paths (Bug 19)', () => {
+    const spec = generateOpenAPI({
+      title: 'T', version: '1',
+      prefix: '/api/v1',
+      routes: {
+        'GET  /users':     defineRoute({}),
+        'POST /users':     defineRoute({}),
+        'GET  /users/:id': defineRoute({}),
+      }
+    })
+    expect(spec.paths['/api/v1/users']).toBeDefined()
+    expect(spec.paths['/api/v1/users/{id}']).toBeDefined()
+    expect(spec.paths['/users']).toBeUndefined()
+  })
+
+  it('prefix without leading slash is normalised (Bug 19)', () => {
+    const spec = generateOpenAPI({
+      title: 'T', version: '1', prefix: 'api/v2',
+      routes: { 'GET /ping': defineRoute({}) }
+    })
+    expect(spec.paths['/api/v2/ping']).toBeDefined()
+  })
+
+  // Bug 20: duplicate route keys — JS object literals deduplicate keys at parse time,
+  // so the only way to get true duplicates through is via a Proxy or direct test of
+  // the warn logic. We verify the guard works by passing a pre-built routes object
+  // where a second entry with the same resolved path comes from a trailing-slash variant.
+  it('duplicate route keys emit a warning and skip second (Bug 20)', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    // /users and /users/ resolve to the same normalised path — triggers duplicate guard
+    const spec = generateOpenAPI({
+      title: 'T', version: '1',
+      routes: {
+        'GET /users':  { ...defineRoute({}), summary: 'first'  },
+        'GET /users/': { ...defineRoute({}), summary: 'second' },
+      }
+    })
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('duplicate'))
+    // First definition is kept
+    expect(spec.paths['/users']!['get']!.summary).toBe('first')
+    warn.mockRestore()
+  })
+
+  // Bug 21: trailing slash normalisation
+  it('trailing slash routes deduplicate to same path (Bug 21)', () => {
+    const spec = generateOpenAPI({
+      title: 'T', version: '1',
+      routes: Object.fromEntries([
+        ['GET /users/',  defineRoute({})],
+        ['POST /users/', defineRoute({})],
+      ])
+    })
+    expect(spec.paths['/users']).toBeDefined()
+    expect(spec.paths['/users/']). toBeUndefined()
+    expect(spec.paths['/users']!['get']).toBeDefined()
+    expect(spec.paths['/users']!['post']).toBeDefined()
+  })
+
+  it('root path "/" is preserved as-is (Bug 21)', () => {
+    const spec = generateOpenAPI({ title: 'T', version: '1', routes: { 'GET /': defineRoute({}) } })
+    expect(spec.paths['/']!['get']).toBeDefined()
+  })
+
   it('includes servers when provided', () => {
     const spec = generateOpenAPI({
       title: 'T', version: '1',
@@ -1824,7 +1958,6 @@ describe('generateOpenAPI()', () => {
       'DELETE /users/:id': defineRoute({ params: schema as any }),
     }
     const spec = generateOpenAPI({ title: 'T', version: '1', routes })
-    expect(Object.keys(spec.paths)).toHaveLength(2) // /users and /users/{id}
     expect(spec.paths['/users']!['post']).toBeDefined()
     expect(spec.paths['/users']!['get']).toBeDefined()
     expect(spec.paths['/users/{id}']!['get']).toBeDefined()

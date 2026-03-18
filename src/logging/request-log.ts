@@ -18,11 +18,15 @@
 // All symbols are pure ASCII — safe on Windows CP1252, all terminals, all CI.
 //
 // Config (all optional — auto-detected from NODE_ENV):
-//   logAllRequests  — log every request, not just errors  (default: true in dev, false in prod)
-//   logRequestId    — print [req_id] on each log line     (default: true)
-//   slowThreshold   — SLOW warning if response >= N ms    (default: 0=off in dev, 1000 in prod)
-//   logRequestBody  — include redacted request body       (default: false — security risk)
-//   logResponseBody — include redacted response body      (default: false — security risk)
+//   logAllRequests  — log every request, not just errors        (default: true dev, false prod)
+//   logIncoming     — show >> arrival lines                     (default: true)
+//   logRequestId    — print [req_id] on each log line           (default: true)
+//   shortRequestId  — show only last 8 chars of request ID      (default: false)
+//   logClientIp     — print client IP on each response line     (default: false)
+//   lineColor       — 'method' colours by verb, 'level' by status (default: 'method')
+//   slowThreshold   — SLOW warning if response >= N ms          (default: 500ms dev, 1000 prod)
+//   logRequestBody  — include redacted request body             (default: false)
+//   logResponseBody — include redacted response body            (default: false)
 //   redact          — extra field paths to always redact
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -31,8 +35,6 @@ import type { Logger, LoggerConfig } from '../types/index.js'
 import { isDev } from '../core/env.js'
 
 // ── Route pattern extraction ──────────────────────────────────────────────────
-// Returns matched pattern (/api/v1/users/:id), NOT the raw URL.
-// Keeps log cardinality low — one template per route, not one per request.
 function getEndpoint(req: Request): string {
   const pattern = req.route?.path as string | undefined
   if (!pattern) return (req.originalUrl ?? req.path).split('?')[0]!
@@ -42,7 +44,6 @@ function getEndpoint(req: Request): string {
     return full.length > 1 ? full.replace(/\/+$/, '') : full
   }
 
-  // Error path — Express clears baseUrl on error. Reconstruct from originalUrl.
   const url          = (req.originalUrl ?? req.path).split('?')[0]!
   const patternParts = pattern.split('/').filter(Boolean)
   const urlParts     = url.split('/').filter(Boolean)
@@ -52,6 +53,17 @@ function getEndpoint(req: Request): string {
     return full.length > 1 ? full.replace(/\/+$/, '') : full
   }
   return url
+}
+
+// ── Client IP extraction ──────────────────────────────────────────────────────
+// Reads x-forwarded-for first (load balancer / proxy), then socket.remoteAddress.
+function getClientIp(req: Request): string {
+  const forwarded = req.headers['x-forwarded-for']
+  if (typeof forwarded === 'string') {
+    const first = forwarded.split(',')[0]?.trim()
+    if (first) return first
+  }
+  return (req.socket?.remoteAddress ?? req.ip ?? 'unknown')
 }
 
 // ── Sensitive field redaction ─────────────────────────────────────────────────
@@ -87,9 +99,6 @@ function captureResponseBody(res: Response): () => unknown {
 }
 
 // ── ANSI colour helpers ───────────────────────────────────────────────────────
-// Colors are ONLY applied when stdout is a real interactive TTY.
-// This means: no garbage escape codes in file redirects, CI pipes, or Windows
-// terminals that don't support ANSI. Color is opt-in by the environment.
 const USE_COLOR = Boolean(process.stdout.isTTY)
 
 const C = {
@@ -139,13 +148,24 @@ function pad(s: string, w: number): string {
   return s.length >= w ? s : s + ' '.repeat(w - s.length)
 }
 
+// ── Request ID formatting ─────────────────────────────────────────────────────
+// shortRequestId: show only last 8 chars — less noise in terminal, still unique enough
+function formatRequestId(id: string, short: boolean): string {
+  if (!id) return ''
+  return short ? id.slice(-8) : id
+}
+
 // ── Main export ───────────────────────────────────────────────────────────────
 export function requestLogger(logger: Logger, config: LoggerConfig = {}): RequestHandler {
   const logAll      = config.logAllRequests ?? isDev
+  const logIncoming = config.logIncoming    ?? true
   const logId       = config.logRequestId   ?? true
+  const shortId     = config.shortRequestId ?? false
+  const logIp       = config.logClientIp    ?? false
+  const lineColor   = config.lineColor      ?? 'method'
   const slowMs      = config.slowThreshold !== undefined
     ? config.slowThreshold
-    : (isDev ? 0 : 1000)
+    : (isDev ? 500 : 1000)
   const logReqBody  = config.logRequestBody  ?? false
   const logResBody  = config.logResponseBody ?? false
   const extraRedact = config.redact ?? []
@@ -155,7 +175,8 @@ export function requestLogger(logger: Logger, config: LoggerConfig = {}): Reques
     const getResBody = logResBody ? captureResponseBody(res) : null
 
     // ── Incoming  >>  ────────────────────────────────────────────────────────
-    if (logAll) {
+    // logIncoming:false hides arrival lines while keeping response lines
+    if (logAll && logIncoming) {
       const inPayload: Record<string, unknown> = {
         requestId: req.id,
         method:    req.method,
@@ -167,10 +188,10 @@ export function requestLogger(logger: Logger, config: LoggerConfig = {}): Reques
       const ts     = timestamp()
       const method = methodColor(req.method) + C.bold + pad(req.method, METHOD_W) + C.reset
       const path   = C.white + req.path + C.reset
-      const rid    = logId && req.id ? `  ${C.dim}[${req.id}]${C.reset}` : ''
+      const rid    = logId && req.id
+        ? `  ${C.dim}[${formatRequestId(req.id, shortId)}]${C.reset}`
+        : ''
 
-      // The logger (pino or console) prepends its own [LEVEL] badge in dev.
-      // We only supply the request-specific part of the line.
       logger.debug(inPayload, `${ts}  >>  ${method} ${path}${rid}`)
     }
 
@@ -182,7 +203,6 @@ export function requestLogger(logger: Logger, config: LoggerConfig = {}): Reques
       const isSlow      = slowMs > 0 && duration_ms >= slowMs
       const isError     = status >= 400
 
-      // Prod mode: suppress successful non-slow logs to keep volume low
       if (!logAll && !isError && !isSlow) return
 
       const outPayload: Record<string, unknown> = {
@@ -192,6 +212,8 @@ export function requestLogger(logger: Logger, config: LoggerConfig = {}): Reques
         status,
         duration_ms,
       }
+      if (logIp)
+        outPayload['ip'] = getClientIp(req)
       if (logReqBody && req.body !== undefined)
         outPayload['reqBody'] = redactBody(req.body, extraRedact)
       if (logResBody && getResBody)
@@ -200,16 +222,23 @@ export function requestLogger(logger: Logger, config: LoggerConfig = {}): Reques
         outPayload['slow'] = true
 
       const ts      = timestamp()
-      const sc      = statusColor(status) + C.bold
-      const mc      = methodColor(req.method) + C.bold
-      const statusS = sc + status.toString() + C.reset
-      const methodS = mc + pad(req.method, METHOD_W) + C.reset
+      const sc      = statusColor(status)
+
+      // lineColor:'level' — entire method + status coloured by response level
+      // lineColor:'method' (default) — method coloured by verb, status by level
+      const methodColorFn = lineColor === 'level' ? statusColor(status) : methodColor(req.method)
+
+      const statusS = sc + C.bold + status.toString() + C.reset
+      const methodS = methodColorFn + C.bold + pad(req.method, METHOD_W) + C.reset
       const ep      = C.white + pad(endpoint, ENDPOINT_W) + C.reset
       const dur     = C.dim + `${duration_ms}ms`.padStart(7) + C.reset
-      const rid     = logId && req.id ? `  ${C.dim}[${req.id}]${C.reset}` : ''
+      const rid     = logId && req.id
+        ? `  ${C.dim}[${formatRequestId(req.id, shortId)}]${C.reset}`
+        : ''
+      const ipStr   = logIp ? `  ${C.dim}${getClientIp(req)}${C.reset}` : ''
       const slow    = isSlow ? `  ${C.yellow}${C.bold}SLOW${C.reset}` : ''
 
-      const msg = `${ts}  <<  ${statusS}  ${methodS} ${ep} ${dur}${rid}${slow}`
+      const msg = `${ts}  <<  ${statusS}  ${methodS} ${ep} ${dur}${rid}${ipStr}${slow}`
 
       if      (isSlow)        logger.warn (outPayload, msg)
       else if (status >= 500) logger.error(outPayload, msg)

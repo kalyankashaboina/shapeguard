@@ -13,41 +13,31 @@ Strict by default. Lightweight. Production-ready.
 
 ---
 
-## What's new in v0.3.0
+## What's new in v0.6.0
 
-> **OpenAPI + Swagger · Testing helpers · Rate limiting · Cache hints**
+> **Logger control — four new options for precise terminal and log output**
 
 ```ts
-// Auto-generate OpenAPI 3.1 spec — zero duplication
-import { generateOpenAPI } from 'shapeguard'
-import swaggerUi from 'swagger-ui-express'
-
-const spec = generateOpenAPI({
-  title: 'My API', version: '1.0.0',
-  routes: {
-    'POST /users':     CreateUserRoute,   // your existing defineRoute() definitions
-    'GET  /users/:id': GetUserRoute,
+app.use(shapeguard({
+  logger: {
+    logIncoming:    false,   // hide >> arrival lines, keep << response lines
+    shortRequestId: true,    // [req_019cfa6f...] → [3a3045a]
+    logClientIp:    true,    // 192.168.1.100 on every response line
+    lineColor:      'level', // 2xx=green, 4xx=yellow, 5xx=red (not method colour)
   }
-})
-app.use('/docs', swaggerUi.serve, swaggerUi.setup(spec))  // open /docs in browser
-app.get('/openapi.json', (_req, res) => res.json(spec))    // import into Postman
+}))
 
-// Unit-test controllers — no HTTP, no Express setup
-import { mockRequest, mockResponse, mockNext } from 'shapeguard/testing'
-const req = mockRequest({ body: { email: 'alice@example.com' } })
-const res = mockResponse()
-await createUser[1](req, res, mockNext())
-expect(res._result().statusCode).toBe(201)
+// Before (default, unchanged):
+// 09:44:57  [DEBUG]  >>  POST    /api/v1/users          [req_019cfa6f23691913c86...]
+// 09:44:57  [INFO]   <<  201  POST    /api/v1/users  2ms [req_019cfa6f23691913c86...]
 
-// Built-in rate limiting — no extra package
-defineRoute({
-  body:      CreateUserDTO,
-  rateLimit: { windowMs: 60_000, max: 10, store: redisStore }, // plug in Redis
-  cache:     { maxAge: 60, private: true },                     // Cache-Control header
-})
+// After (all four options on):
+// 09:44:57  [INFO]   <<  201  POST    /api/v1/users  2ms [3a3045a]  192.168.1.100
 ```
 
-[→ Full v0.3.0 changelog](./CHANGELOG.md) · [→ Migration guide](./MIGRATION.md)
+All four options are fully independent — use any combination. Zero config change needed for existing apps.
+
+[→ Full v0.6.0 changelog](./CHANGELOG.md) · [→ Migration guide](./MIGRATION.md)
 
 ---
 
@@ -93,8 +83,9 @@ If pino is not installed, shapeguard uses a built-in console logger automaticall
 | `zod`         | Yes      | Schema validation              |
 | `pino`        | Optional | Richer logging if installed    |
 | `pino-pretty` | Optional | Pretty dev logs with pino      |
-| `joi`         | Optional | Via `shapeguard/adapters/joi`  |
-| `yup`         | Optional | Via `shapeguard/adapters/yup`  |
+| `joi`         | Optional | Via `shapeguard/adapters/joi`     |
+| `yup`         | Optional | Via `shapeguard/adapters/yup`     |
+| `winston`     | Optional | Via `shapeguard/adapters/winston` |
 
 ---
 
@@ -123,11 +114,11 @@ import { z } from 'zod'
 import { defineRoute, createDTO } from 'shapeguard'
 
 // createDTO() infers the TypeScript type automatically — no manual z.infer needed
-const CreateUserDTO = createDTO({
+const CreateUserDTO = createDTO(z.object({
   email:    z.string().email(),
   name:     z.string().min(1).max(100),
   password: z.string().min(8),
-})
+}))
 
 const UserResponseSchema = z.object({
   id:        z.string().uuid(),
@@ -325,9 +316,9 @@ app.use(shapeguard({
 
 ```ts
 import {
-  // v0.3.0
+
   generateOpenAPI,   // generate OpenAPI 3.1 spec from route definitions
-  // v0.2.0+
+
   handle,            // validate + asyncHandler in one — recommended
   validate,          // request validation + response stripping
   asyncHandler,      // async route safety for Express 4
@@ -350,7 +341,7 @@ import {
 } from 'shapeguard'
 ```
 
-### Tier 3 — special cases
+### Tier 3 — adapters and special cases
 
 ```ts
 import {
@@ -358,6 +349,14 @@ import {
   zodAdapter,        // wrap zod schemas manually
   isZodSchema,       // detect zod schemas
 } from 'shapeguard'
+
+// Schema adapters — Joi, Yup, Winston
+import { joiAdapter }     from 'shapeguard/adapters/joi'
+import { yupAdapter }     from 'shapeguard/adapters/yup'
+import { winstonAdapter } from 'shapeguard/adapters/winston'
+
+// Testing helpers
+import { mockRequest, mockResponse, mockNext } from 'shapeguard/testing'
 ```
 
 ### Types
@@ -429,16 +428,15 @@ total             ~20kb gzip
 
 | Doc | What's inside |
 |-----|---------------|
-| [VALIDATION.md](./docs/VALIDATION.md) | validate(), handle(), defineRoute(), createDTO(), transform, rateLimit, cache, adapters |
-| [OPENAPI.md](./docs/OPENAPI.md) | generateOpenAPI(), Swagger UI, serving the spec — **v0.3.0** |
-| [TESTING.md](./docs/TESTING.md) | mockRequest, mockResponse, mockNext, controller unit tests — **v0.3.0** |
-| [ERRORS.md](./docs/ERRORS.md) | AppError, errorHandler, operational vs programmer |
-| [LOGGING.md](./docs/LOGGING.md) | pino, requestId, body logging, dev vs prod, custom logger |
-| [RESPONSE.md](./docs/RESPONSE.md) | res helpers, withShape, all response shapes |
-| [CONFIGURATION.md](./docs/CONFIGURATION.md) | every config option, global vs scoped |
-| [MIGRATION.md](./MIGRATION.md) | upgrade guides — v0.1.x → v0.2.0 → v0.3.0 |
-| [CHANGELOG.md](./CHANGELOG.md) | version history |
-| [SETUP.md](./SETUP.md) | GitHub + npm publish steps |
+| [VALIDATION.md](./docs/VALIDATION.md) | validate(), handle(), defineRoute(), createDTO(), transform, rateLimit, cache, Joi/Yup adapters |
+| [OPENAPI.md](./docs/OPENAPI.md) | generateOpenAPI(), prefix, operationId, tags, summary, inline schemas, Swagger UI |
+| [TESTING.md](./docs/TESTING.md) | mockRequest(), mockResponse(), mockNext(), unit testing controllers without Express |
+| [ERRORS.md](./docs/ERRORS.md) | AppError, errorHandler, error codes, operational vs programmer errors |
+| [LOGGING.md](./docs/LOGGING.md) | pino, requestId, logIncoming, shortRequestId, logClientIp, lineColor, Winston adapter |
+| [RESPONSE.md](./docs/RESPONSE.md) | res.ok, res.created, res.paginated, withShape, response envelope |
+| [CONFIGURATION.md](./docs/CONFIGURATION.md) | every config option with defaults, global vs per-route |
+| [MIGRATION.md](./MIGRATION.md) | upgrade guides v0.1.x → v0.2.0 → v0.3.0 → v0.3.1 → v0.4.0 → v0.5.0 → v0.6.0 |
+| [CHANGELOG.md](./CHANGELOG.md) | full version history |
 
 ## Examples
 
@@ -450,8 +448,8 @@ total             ~20kb gzip
 | [handle-and-dto](./examples/handle-and-dto/) | `handle()` + `createDTO()` — less boilerplate |
 | [transform-hook](./examples/transform-hook/) | Password hashing, slug generation via `transform` |
 | [global-config](./examples/global-config/) | `validation.strings`, `logger.silent`, custom request ID |
-| [with-openapi](./examples/with-openapi/) | `generateOpenAPI()` + Swagger UI — **v0.3.0** |
-| [with-testing](./examples/with-testing/) | `mockRequest()` / `mockResponse()` unit tests — **v0.3.0** |
+| [with-openapi](./examples/with-openapi/) | `generateOpenAPI()` + Swagger UI |
+| [with-testing](./examples/with-testing/) | `mockRequest()` / `mockResponse()` unit tests |
 
 ---
 

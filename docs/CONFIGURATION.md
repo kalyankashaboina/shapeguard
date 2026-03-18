@@ -97,14 +97,33 @@ app.use(shapeguard({
     // false = only errors (4xx/5xx) and slow requests are logged
     logAllRequests: false,
 
+    // Show >> arrival lines (default: true).
+    // false = hide arrival lines, keep only << response lines
+    logIncoming: false,
+
     // Show [req_id] on every log line.
     // Default: true — set false to hide request ID from log output.
     // (separate from response.includeRequestId which controls the HTTP header)
     logRequestId: true,
 
+    // Show only last 8 characters of request ID in log output.
+    // Full ID still generated and forwarded in X-Request-Id header.
+    // Default: false
+    shortRequestId: true,
+
+    // Log client IP on each response line.
+    // Reads x-forwarded-for first, then socket.remoteAddress.
+    // Default: false
+    logClientIp: true,
+
+    // Line colour mode in dev/pretty output.
+    // 'method' (default): GET=green, POST=cyan, DELETE=red
+    // 'level':            2xx=green, 4xx=yellow, 5xx=red
+    lineColor: 'level',
+
     // Flag requests slower than this many milliseconds.
     // 0 = disabled entirely.
-    // Default: 0 dev / 1000 prod
+    // Default: 500 dev / 1000 prod
     slowThreshold: 1000,
 
     // Include req.body in the request log entry.
@@ -332,8 +351,12 @@ with wrong HTTP method. Works with parameterized routes like `/:id`.
 | `logger.level` | `string` | `'debug'` dev / `'warn'` prod | Log level |
 | `logger.pretty` | `boolean` | `true` dev / `false` prod | pino-pretty format |
 | `logger.logAllRequests` | `boolean` | `true` dev / `false` prod | Log every 2xx |
+| `logger.logIncoming` | `boolean` | `true` | Show `>>` arrival lines |
 | `logger.logRequestId` | `boolean` | `true` | Show [req_id] in log lines |
-| `logger.slowThreshold` | `number` | `0` dev / `1000` prod | Slow warn ms (0=off) |
+| `logger.shortRequestId` | `boolean` | `false` | Show last 8 chars of req ID only |
+| `logger.logClientIp` | `boolean` | `false` | Log client IP on response lines |
+| `logger.lineColor` | `'method' \| 'level'` | `'method'` | Line colour mode |
+| `logger.slowThreshold` | `number` | `500` dev / `1000` prod | Slow warn ms (0=off) |
 | `logger.logRequestBody` | `boolean` | `false` | Log req.body (redacted) |
 | `logger.logResponseBody` | `boolean` | `false` | Log response JSON (redacted) |
 | `logger.redact` | `string[]` | `[]` | Extra redact paths |

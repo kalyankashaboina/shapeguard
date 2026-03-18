@@ -167,6 +167,31 @@ export interface LoggerConfig {
   // (default: true — set false to hide req ID from log output)
   logRequestId?: boolean
 
+  // Show only the last 8 characters of the request ID on log lines.
+  // Full ID is still generated and forwarded in headers — only the display is shortened.
+  // Useful for terminal output where the full 28-char ID is too noisy.
+  // Example: [req_019c...] → [019cfa6f]
+  // (default: false — full ID shown)
+  shortRequestId?: boolean
+
+  // Log the client IP address on each response line.
+  // Reads from x-forwarded-for (load balancer / proxy) first, then socket.remoteAddress.
+  // Example: 09:44:57  [INFO]  <<  201  POST  /users  2ms  [req_abc]  127.0.0.1
+  // (default: false)
+  logClientIp?: boolean
+
+  // Hide the incoming >> request arrival lines entirely.
+  // Response << lines are still logged normally.
+  // Useful when you want response times and status codes but not the extra arrival noise.
+  // (default: true — incoming lines shown when logAllRequests is true)
+  logIncoming?: boolean
+
+  // Colour the entire log line based on response status level instead of HTTP method.
+  // 'method' (default): method colour — GET=green, POST=cyan, DELETE=red, etc.
+  // 'level':            status colour — 2xx=green, 4xx=yellow, 5xx=red
+  // Only affects dev/pretty output — JSON prod logs are unaffected.
+  lineColor?: 'method' | 'level'
+
   // Extra field paths to redact from pino logs (shapeguard always redacts passwords, tokens, cookies)
   redact?:          string[]
 

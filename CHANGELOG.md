@@ -9,14 +9,81 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
-## [Unreleased] — v0.4.0 planned
+## [Unreleased]
 
-> Work planned after v0.3.0 ships.
+> No unreleased changes.
 
-### Added (planned)
+---
 
-- WebSocket support
-- GraphQL schema integration
+## [0.6.0] — 2026-03-17
+
+> **Theme: Logger control.** Four new options giving teams precise control over what appears in terminal and log files. Every option is independent — use one, some, or all. Zero config change needed for existing apps.
+
+### Added
+
+- **`logIncoming: false`** (`LoggerConfig`) — hides the `>>` request arrival lines entirely while keeping `<<` response lines; useful when you want response times and status codes but not the extra arrival noise in busy terminals
+- **`shortRequestId: true`** (`LoggerConfig`) — shows only the last 8 characters of the request ID on log lines (e.g. `[req_019cfa6f...]` → `[3a3045a]`); the full ID is still generated and forwarded in headers, only the terminal display is shortened
+- **`logClientIp: true`** (`LoggerConfig`) — logs the client IP address on each response line; reads `x-forwarded-for` first (load balancer / proxy), then falls back to `socket.remoteAddress`; IP is also included in the structured JSON payload as `ip`
+- **`lineColor: 'level'`** (`LoggerConfig`) — colours the entire log line (method + status) based on the response status level (`2xx`=green, `4xx`=yellow, `5xx`=red) instead of the default HTTP method colour (`GET`=green, `POST`=cyan, `DELETE`=red); only affects dev/pretty output — JSON prod logs are unaffected
+
+---
+
+## [0.5.0] — 2026-03-17
+
+> **Theme: OpenAPI overhaul.** Five bugs fixed, three new capabilities added.
+> Fully backwards-compatible — no breaking changes.
+
+### Added
+
+- **`prefix` option in `generateOpenAPI()`** — pass `prefix: '/api/v1'` once and it is prepended to every route path automatically; no more repeating the prefix on every key
+- **`operationId` auto-generated** — every operation now gets a stable, SDK-friendly `operationId` derived from its method and path (e.g. `POST /users/:id` → `postUsersId`); SDK generators no longer produce unnamed operations
+- **`tags` and `summary` per route** — add `tags` and `summary` directly to any `defineRoute()` result or inline route definition; Swagger UI groups and labels operations correctly
+- **Inline route definitions** (`InlineRouteDefinition`) — existing Express apps can now describe schemas directly inside `generateOpenAPI()` without using `defineRoute()` at all; unlocks Swagger for apps that don't want to change their routes
+
+### Fixed
+
+- **422 and 500 responses now include the full error envelope schema** — previously both had only a `description` string; now each includes the complete `{ success, message, error: { code, message, details } }` shape that `errorHandler()` actually sends
+- **Duplicate route keys warned and skipped** — two routes resolving to the same method + path now emit a `console.warn` and keep the first definition; previously the second silently overwrote the first with no indication
+- **Trailing slash creates duplicate paths** — `GET /users` and `GET /users/` now normalise to the same `/users` path in the spec; previously they appeared as two separate paths
+- **`ZodBoolean`, `ZodNumber`, `ZodArray`, `ZodEnum`, `ZodObject` type mapping** — all Zod types now map correctly to their JSON Schema equivalents *(already fixed in v0.4.0 codebase, confirmed and tested in v0.5.0)*
+- **Response schema used in 200 envelope** — the `response` field in `defineRoute()` now populates the `data` property of the 200 response schema *(already fixed in v0.4.0 codebase, confirmed and tested in v0.5.0)*
+
+---
+
+## [0.4.0] — 2026-03-17
+
+> **Theme: Correctness and extensibility.** Eight bugs fixed, Winston adapter shipped.
+> Fully backwards-compatible — no breaking changes.
+
+### Added
+
+- `shapeguard/adapters/winston` — ships a `winstonAdapter()` function that bridges Winston's argument order (`msg, meta`) to shapeguard's Logger interface (`meta, msg`); import and pass to `logger.instance` — no manual wrapper needed
+
+### Fixed
+
+- **Logger instance validated at mount time** (`logger.ts`) — passing a logger without `.debug()`, `.info()`, `.warn()`, or `.error()` now throws a clear error immediately listing the missing methods, rather than crashing with a `TypeError` on the first request; error message explicitly mentions `shapeguard/adapters/winston`
+- **`withShape` warns on undefined tokens** (`with-shape.ts`) — in development, a `console.warn` is emitted when a template token (e.g. `{data.uptime}`) does not exist in the response; catches path typos immediately rather than silently sending `undefined` to clients
+- **Global config no longer shared between `shapeguard()` instances** (`validate.ts`, `shapeguard.ts`) — removed the `setFallbackValidationConfig` module-level singleton; config is now scoped exclusively via `res.locals` per request, so two app instances running in the same process (e.g. integration tests with dev + prod apps) can no longer overwrite each other's validation config
+- **Joi/Yup `allErrors` option** (`adapters/joi.ts`, `adapters/yup.ts`) — both adapters now respect the `allErrors` option passed to `joiAdapter()` and `yupAdapter()`; previously `abortEarly` was hardcoded to `true` so `allErrors` had zero effect *(already fixed in v0.3.1 codebase, confirmed and tested in v0.4.0)*
+- **`router.route()` 405 tracking** (`router/create-router.ts`) — `router.route('/users').get().post()` pattern is now intercepted by the proxy and tracked for 405 Method Not Allowed responses *(already fixed in v0.3.1 codebase, confirmed and tested in v0.4.0)*
+- **`Object.freeze` scoped to envelope only** (`core/response.ts`) — `res.created({ data: user })` no longer deep-freezes the caller's `user` variable; only the response envelope wrapper is frozen *(already fixed in v0.3.1 codebase, confirmed and tested in v0.4.0)*
+- **`mockRequest` socket, ip, and `req.get`** (`testing/index.ts`) — `socket.remoteAddress`, `ip`, and `get(header)` are now present; rate limiter tests no longer share a single bucket due to unknown IP *(already fixed in v0.3.1 codebase, confirmed and tested in v0.4.0)*
+
+---
+
+## [0.3.1] — 2026-03-17
+
+> **Theme: Bug fixes.** Six correctness issues found in v0.3.0 audit.
+> Fully backwards-compatible — no API changes.
+
+### Fixed
+
+- **CJS support** (`package.json`) — added `"require"` condition to all `exports` entries and a top-level `"main"` field pointing to `dist/index.cjs`; CJS users no longer receive `ERR_REQUIRE_ESM` when calling `require('shapeguard')`
+- **`allErrors:true` now returns all issues** (`AppError.validation()`) — previously only the first issue was stored in `details`; now the full array is stored when more than one issue is provided, giving clients visibility into every validation failure
+- **`createDTO()` docs examples** (`README.md`, `docs/VALIDATION.md`) — examples showed a plain object being passed to `createDTO()`; the function requires a `z.object(...)` call; all examples corrected
+- **Transform hook no longer swallows `AppError`** (`validate.ts`) — a `throw AppError.conflict()` (or any `AppError`) inside a `transform` function was being caught and re-thrown as a generic 500; it is now re-thrown as-is so the correct status and code reach the client
+- **`slowThreshold` default fixed in dev** (`request-log.ts`) — default was `0ms` in development, making `0 > 0` always false and the `SLOW` badge never visible; default is now `500ms` in dev (`1000ms` in prod unchanged)
+- **`setMaxListeners` leak removed** (`logger.ts`) — `process.setMaxListeners(getMaxListeners() + 1)` was called on every `shapeguard()` mount; with 10+ test instances this caused `MaxListenersExceededWarning`; pino v8 does not require this call and the line has been removed
 
 ---
 

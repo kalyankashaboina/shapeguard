@@ -10,7 +10,7 @@ import { createLogger } from './logging/logger.js'
 import { requestLogger } from './logging/request-log.js'
 import { injectResHelpers } from './validation/res-helpers.js'
 import { generateRequestId } from './core/request-id.js'
-import { VALIDATION_CONFIG_KEY, setFallbackValidationConfig } from './validation/validate.js'
+import { VALIDATION_CONFIG_KEY } from './validation/validate.js'
 
 export function shapeguard(config: ShapeguardConfig = {}): RequestHandler {
   const {
@@ -29,8 +29,6 @@ export function shapeguard(config: ShapeguardConfig = {}): RequestHandler {
   const ridEnabled   = requestIdConfig.enabled   ?? true
   const ridHeader    = (requestIdConfig.header    ?? 'x-request-id').toLowerCase()
   const ridGenerator = requestIdConfig.generator  ?? generateRequestId
-
-  setFallbackValidationConfig(validationConfig)
 
   const logger     = createLogger(loggerConfig)
   const resHelpers = injectResHelpers(responseConfig)

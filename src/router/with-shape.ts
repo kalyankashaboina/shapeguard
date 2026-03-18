@@ -5,6 +5,7 @@
 // ─────────────────────────────────────────────
 
 import type { Request, Response, NextFunction, RequestHandler } from 'express'
+import { isDev } from '../core/env.js'
 
 type ShapeMap = Record<string, string>  // { ok: '{data.ok}', uptime: '{data.uptime}' }
 type ShapeMode = ShapeMap | 'raw'
@@ -35,7 +36,16 @@ export function withShape(shape: ShapeMode): RequestHandler {
       // Map mode — extract fields from envelope using token paths
       const mapped: Record<string, unknown> = {}
       for (const [outputKey, token] of Object.entries(shape)) {
-        mapped[outputKey] = resolveToken(token, body)
+        const value = resolveToken(token, body)
+        // Warn in development when a token path does not exist in the response.
+        // Silent undefined in prod is fine — noisy in dev catches typos early.
+        if (isDev && value === undefined) {
+          console.warn(
+            `[shapeguard] withShape: key "${outputKey}" resolved to undefined. ` +
+            `Token "${token}" does not exist in the response. Check the path.`
+          )
+        }
+        mapped[outputKey] = value
       }
       originalJson(mapped)
       return res

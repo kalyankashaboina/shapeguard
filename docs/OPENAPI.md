@@ -25,10 +25,11 @@ import { generateOpenAPI } from 'shapeguard'
 const spec = generateOpenAPI({
   title:   'My API',
   version: '1.0.0',
+  prefix:  '/api/v1',   // prepended to every route — no repetition needed
   routes: {
-    'POST   /users':     CreateUserRoute,
-    'GET    /users':     ListUsersRoute,
-    'GET    /users/:id': GetUserRoute,
+    'POST   /users':     { ...CreateUserRoute, summary: 'Create user', tags: ['Users'] },
+    'GET    /users':     { ...ListUsersRoute,  summary: 'List users',  tags: ['Users'] },
+    'GET    /users/:id': { ...GetUserRoute,    summary: 'Get user',    tags: ['Users'] },
     'PUT    /users/:id': UpdateUserRoute,
     'DELETE /users/:id': DeleteUserRoute,
   }
@@ -54,9 +55,41 @@ generateOpenAPI(config: OpenAPIConfig): OpenAPISpec
   version:      string                                  // API version
   description?: string                                  // optional description
   servers?:     Array<{ url: string; description? }>    // server URLs
-  routes:       Record<string, RouteDefinition>         // your defineRoute() outputs
+  prefix?:      string                                  // path prefix e.g. '/api/v1'
+  routes:       Record<string, RouteDefinition | InlineRouteDefinition>
 }
 ```
+
+### Route values
+
+Each route value can be either a `defineRoute()` result or an inline object:
+
+```ts
+// Option A — defineRoute() result with optional extras
+'POST /users': {
+  ...defineRoute({ body: CreateUserDTO, response: UserResponseDTO }),
+  summary: 'Create a new user',
+  tags:    ['Users'],
+}
+
+// Option B — inline schema (no defineRoute() needed — great for existing apps)
+'POST /users': {
+  summary:  'Create a new user',
+  tags:     ['Users'],
+  body:     z.object({ email: z.string(), name: z.string() }),
+  response: z.object({ id: z.string(), email: z.string() }),
+}
+```
+
+### operationId
+
+Every operation gets a stable `operationId` auto-generated from its method and path:
+
+| Route | operationId |
+|-------|------------|
+| `POST /users` | `postUsers` |
+| `GET /users/:id` | `getUsersId` |
+| `DELETE /users/:id/posts` | `deleteUsersIdPosts` |
 
 ### Route key format
 

@@ -135,7 +135,6 @@ function makeConsoleLogger(minLevel: string, pretty: boolean, redact: string[]):
 function tryPino(level: string, pretty: boolean, redact: string[]): Logger | null {
   try {
     const pino = _req('pino') as (o: object) => Logger
-    if (pretty) process.setMaxListeners(process.getMaxListeners() + 1)
     return pino({
       level,
       redact: { paths: redact, censor: '[REDACTED]' },
@@ -178,7 +177,21 @@ const SILENT_LOGGER: Logger = {
 
 export function createLogger(config: LoggerConfig = {}): Logger {
   if (config.silent) return SILENT_LOGGER
-  if (config.instance) return config.instance
+  if (config.instance) {
+    // Validate all four required methods exist — catch misconfigured loggers
+    // (e.g. Winston passed without an adapter) at mount time, not at first request.
+    const missing = (['debug', 'info', 'warn', 'error'] as const).filter(
+      m => typeof (config.instance as unknown as Record<string, unknown>)[m] !== 'function'
+    )
+    if (missing.length > 0) {
+      throw new Error(
+        `[shapeguard] logger.instance is missing required method(s): ${missing.join(', ')}. ` +
+        `Each method must be (obj: object, msg?: string) => void. ` +
+        `For Winston, use the shapeguard/adapters/winston adapter.`
+      )
+    }
+    return config.instance
+  }
   const level  = config.level  ?? (isDev ? 'debug' : 'warn')
   const pretty = config.pretty ?? isDev
   const redact = [...new Set([...BASE_REDACT, ...(config.redact ?? [])])]

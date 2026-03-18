@@ -7,7 +7,7 @@
 
 import type { Request, Response, NextFunction, RequestHandler } from 'express'
 import type { RouteSchema, SchemaAdapter, ValidationConfig, ValidationIssue } from '../types/index.js'
-import { AppError } from '../errors/AppError.js'
+import { AppError, isAppError } from '../errors/AppError.js'
 import { sanitizeValidationIssue } from './sanitize.js'
 import { runPreParse, DEFAULT_LIMITS, enforceContentType, type PreParseLimits } from '../core/pre-parse.js'
 import { asyncHandler } from '../errors/not-found.js'
@@ -41,16 +41,14 @@ function normalise(schema: SchemaAdapter | unknown): SchemaAdapter {
 // app instances exist in the same process (e.g. dev + prod in tests).
 export const VALIDATION_CONFIG_KEY = '__sg_validation_config__'
 
-// Fallback for the rare case validate() is used without shapeguard() middleware
-let _fallbackConfig: ValidationConfig = {}
-export function setFallbackValidationConfig(cfg: ValidationConfig): void {
-  _fallbackConfig = cfg
-}
+// Empty fallback — used only when validate() is called with no shapeguard()
+// middleware upstream (standalone usage). Never mutated — scoping is via res.locals.
+const EMPTY_CONFIG: ValidationConfig = {}
 
 function getConfig(res: Response, perRoute?: ValidationConfig): ValidationConfig {
   const appConfig = (res.locals as Record<string, unknown>)[VALIDATION_CONFIG_KEY] as ValidationConfig | undefined
-  // Priority: per-route > per-app (res.locals) > fallback
-  return { ...(_fallbackConfig), ...(appConfig ?? {}), ...(perRoute ?? {}) }
+  // Priority: per-route > per-app (res.locals) > empty fallback
+  return { ...EMPTY_CONFIG, ...(appConfig ?? {}), ...(perRoute ?? {}) }
 }
 
 // ── In-memory rate limit store ───────────────
@@ -140,7 +138,7 @@ async function validateRequest(req: Request, res: Response, schema: RouteSchema 
   const opts      = schema as ValidateOptions
   const allErrors = opts.allErrors ?? false
   const appConfig = (res.locals as Record<string, unknown>)[VALIDATION_CONFIG_KEY] as ValidationConfig | undefined
-  const limits    = { ...DEFAULT_LIMITS, ...(appConfig?.limits ?? {}), ..._fallbackConfig.limits, ...(opts.limits ?? {}) }
+  const limits    = { ...DEFAULT_LIMITS, ...(appConfig?.limits ?? {}), ...(opts.limits ?? {}) }
   // Per-route sanitize merges on top of app config — per-route wins
   const sanitize  = getConfig(res, opts.sanitize)
 
@@ -153,7 +151,7 @@ async function validateRequest(req: Request, res: Response, schema: RouteSchema 
     const clean = runPreParse(req.body, limits)
     let parsed = await parseOrThrow(clean, normalise(schema.body), allErrors, sanitize)
     // Apply global string transforms (trim, lowercase) if configured
-    const strCfg = appConfig?.strings ?? _fallbackConfig.strings
+    const strCfg = appConfig?.strings
     if (strCfg) parsed = applyStringTransforms(parsed, strCfg)
     // Run transform hook if defined on the route
     const transform = (schema as ValidateOptions).transform
@@ -161,6 +159,7 @@ async function validateRequest(req: Request, res: Response, schema: RouteSchema 
       try {
         parsed = await Promise.resolve(transform(parsed))
       } catch (err) {
+        if (isAppError(err)) throw err
         throw AppError.internal(err instanceof Error ? err.message : 'Transform failed')
       }
     }

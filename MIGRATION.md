@@ -247,3 +247,402 @@ defineRoute({
 - New subpath export: `'shapeguard/testing'`
 - New error code: `ErrorCode.RATE_LIMIT_EXCEEDED`
 Track progress in [CHANGELOG.md](./CHANGELOG.md).
+
+---
+
+## v0.3.x → v0.4.0
+
+No breaking changes. All v0.3.x code is fully compatible.
+
+### Internal change — `setFallbackValidationConfig` removed
+
+This function was an internal export from `validation/validate.ts` used only by `shapeguard()` itself. It is not part of the public API and was never documented. If you were importing it directly (unsupported usage), remove the call — config is now scoped automatically via `res.locals` per request.
+
+### New: Winston adapter
+
+```ts
+import winston from 'winston'
+import { winstonAdapter } from 'shapeguard/adapters/winston'
+
+const wLogger = winston.createLogger({ ... })
+
+app.use(shapeguard({
+  logger: { instance: winstonAdapter(wLogger) },
+}))
+```
+
+---
+
+## v0.4.x → v0.5.0
+
+No breaking changes. All v0.4.x code is fully compatible.
+
+### New: prefix option
+
+```ts
+// Before — prefix repeated on every key
+generateOpenAPI({
+  routes: {
+    'GET  /api/v1/users':     GetUsersRoute,
+    'POST /api/v1/users':     CreateUserRoute,
+    'GET  /api/v1/users/:id': GetUserRoute,
+  }
+})
+
+// After — set once
+generateOpenAPI({
+  prefix: '/api/v1',
+  routes: {
+    'GET  /users':     GetUsersRoute,
+    'POST /users':     CreateUserRoute,
+    'GET  /users/:id': GetUserRoute,
+  }
+})
+```
+
+### New: tags and summary per route
+
+```ts
+export const CreateUserRoute = {
+  ...defineRoute({ body: CreateUserDTO, response: UserResponseSchema }),
+  summary: 'Create a new user',
+  tags:    ['Users'],
+}
+```
+
+### New: inline route definitions for existing apps
+
+```ts
+generateOpenAPI({
+  prefix: '/api/v1',
+  routes: {
+    'POST /users': {
+      summary: 'Create a user',
+      tags:    ['Users'],
+      body:     z.object({ email: z.string(), name: z.string() }),
+      response: z.object({ id: z.string(), email: z.string() }),
+    },
+  }
+})
+```
+
+---
+
+## v0.5.x → v0.6.0
+
+No breaking changes. All v0.5.x code is fully compatible. All four new options default to the existing behaviour — no config change needed.
+
+### New logger options
+
+All four options are independent — use any combination:
+
+```ts
+app.use(shapeguard({
+  logger: {
+    // Hide >> arrival lines, keep << response lines
+    logIncoming:    false,
+
+    // Show last 8 chars of request ID instead of full 28-char ID
+    shortRequestId: true,
+
+    // Log client IP on each response line
+    logClientIp:    true,
+
+    // Colour whole line by response status instead of HTTP method
+    lineColor:      'level',
+  }
+}))
+```
+
+**`logIncoming: false`** — terminal output before:
+```
+09:44:57.123  [DEBUG]  >>  POST    /api/v1/users          [req_019c...]
+09:44:57.125  [INFO]   <<  201  POST    /api/v1/users  2ms [req_019c...]
+```
+After:
+```
+09:44:57.125  [INFO]   <<  201  POST    /api/v1/users  2ms [req_019c...]
+```
+
+**`shortRequestId: true`** — terminal output before:
+```
+09:44:57.125  [INFO]   <<  201  POST    /api/v1/users  2ms [req_019cfa6f23691913c86c63a3045a]
+```
+After:
+```
+09:44:57.125  [INFO]   <<  201  POST    /api/v1/users  2ms [3a3045a]
+```
+
+**`logClientIp: true`** — adds IP to end of response line:
+```
+09:44:57.125  [INFO]   <<  201  POST    /api/v1/users  2ms [req_019c...]  192.168.1.100
+```
+
+**`lineColor: 'level'`** — colours the entire method+status by response level:
+- `2xx` → whole line green
+- `4xx` → whole line yellow
+- `5xx` → whole line red
+
+---
+
+## v0.5.x → v0.6.0
+
+No breaking changes. All v0.5.x code is fully compatible. All 4 new options are opt-in — existing apps need zero changes.
+
+### New logger options
+
+All four can be used independently or combined:
+
+```ts
+app.use(shapeguard({
+  logger: {
+    // Hide >> arrival lines — keep << response lines only
+    logIncoming: false,
+
+    // Show last 8 chars of request ID instead of full 28-char ID
+    shortRequestId: true,
+
+    // Log client IP on each response line
+    logClientIp: true,
+
+    // Colour whole line by response status instead of HTTP method
+    lineColor: 'level',
+  }
+}))
+```
+
+**Before (default output):**
+```
+09:44:57.123  [DEBUG]  >>  POST    /api/v1/users                       [req_019cfa6f23691913c86c63a3045a]
+09:44:57.125  [INFO]   <<  201  POST    /api/v1/users           2ms   [req_019cfa6f23691913c86c63a3045a]
+```
+
+**After (all 4 options enabled):**
+```
+09:44:57.125  [INFO]   <<  201  POST    /api/v1/users           2ms   [3a3045a]  192.168.1.1
+```
+
+---
+
+## v0.5.x → v0.6.0
+
+No breaking changes. All v0.5.x code is fully compatible. All new options default to their previous behaviour — existing apps need zero changes.
+
+### New logger options
+
+All four are opt-in. Add only the ones you want:
+
+```ts
+app.use(shapeguard({
+  logger: {
+    // Hide >> arrival lines — keep only << response lines
+    logIncoming: false,
+
+    // Show last 8 chars of request ID instead of full 28-char ID
+    shortRequestId: true,
+
+    // Log client IP on every response line
+    logClientIp: true,
+
+    // Colour whole line by response status (2xx=green, 4xx=yellow, 5xx=red)
+    // instead of default method colour (GET=green, POST=cyan, DELETE=red)
+    lineColor: 'level',
+  }
+}))
+```
+
+#### What each option changes
+
+| Option | Default | Effect |
+|--------|---------|--------|
+| `logIncoming` | `true` | `false` hides `>>` arrival lines |
+| `shortRequestId` | `false` | `true` shows last 8 chars only |
+| `logClientIp` | `false` | `true` adds IP to line and JSON payload |
+| `lineColor` | `'method'` | `'level'` colours by status instead of verb |
+
+All options work in any combination. JSON prod logs are unaffected by `lineColor`.
+
+---
+
+## v0.5.x → v0.6.0
+
+No breaking changes. All v0.5.x code is fully compatible. All four new options default to the existing behaviour so nothing changes unless you opt in.
+
+### New logger options — all optional, all independent
+
+```ts
+app.use(shapeguard({
+  logger: {
+    // Hide >> arrival lines — keep only << response lines
+    logIncoming: false,
+
+    // Show last 8 chars of request ID instead of full 28 chars
+    shortRequestId: true,
+
+    // Log client IP on every response line
+    logClientIp: true,
+
+    // Colour entire line by response status (2xx green, 4xx yellow, 5xx red)
+    // instead of the default HTTP method colour
+    lineColor: 'level',
+  }
+}))
+```
+
+Each option is completely independent — use any combination you want.
+
+#### Default values (existing behaviour preserved)
+
+| Option | Default | Effect when changed |
+|--------|---------|-------------------|
+| `logIncoming` | `true` | `false` hides `>>` arrival lines |
+| `shortRequestId` | `false` | `true` shows last 8 chars only |
+| `logClientIp` | `false` | `true` adds IP to every response line |
+| `lineColor` | `'method'` | `'level'` colours by status instead of verb |
+
+---
+
+## v0.5.x → v0.6.0
+
+No breaking changes. All v0.5.x code is fully compatible. All four new options default to the existing behaviour — no config change needed.
+
+### New logger options
+
+All four are optional fields on `LoggerConfig` inside `shapeguard({ logger: { ... } })`.
+
+```ts
+app.use(shapeguard({
+  logger: {
+    // Hide >> arrival lines — keep only << response lines
+    logIncoming: false,
+
+    // Show last 8 chars of request ID instead of full 28-char ID
+    shortRequestId: true,
+
+    // Log client IP on each response line
+    logClientIp: true,
+
+    // Colour entire line by response status level, not HTTP method
+    lineColor: 'level',
+  }
+}))
+```
+
+Each option is fully independent — use any combination.
+
+### Default values (unchanged behaviour)
+
+| Option | Default | What it means |
+|--------|---------|---------------|
+| `logIncoming` | `true` | `>>` lines shown as before |
+| `shortRequestId` | `false` | Full request ID shown as before |
+| `logClientIp` | `false` | IP not logged as before |
+| `lineColor` | `'method'` | Method colour as before |
+
+---
+
+## v0.5.x → v0.6.0
+
+No breaking changes. All v0.5.x code is fully compatible. All 4 new options default to their previous behaviour so nothing changes unless you opt in.
+
+### New logger options — all optional, all independent
+
+```ts
+app.use(shapeguard({
+  logger: {
+    // Hide >> arrival lines — keep << response lines only
+    logIncoming: false,
+
+    // Show last 8 chars of request ID instead of full 28-char ID
+    shortRequestId: true,
+
+    // Log client IP on every response line
+    logClientIp: true,
+
+    // Colour entire line by response status instead of HTTP method
+    lineColor: 'level',
+  }
+}))
+```
+
+Each option is independent — use any combination:
+
+```ts
+// Just hide arrivals + shorten IDs — common team preference
+logger: { logIncoming: false, shortRequestId: true }
+
+// Just add IP logging — useful for rate limit debugging
+logger: { logClientIp: true }
+
+// Full FastAPI-style output
+logger: {
+  logIncoming:    false,   // no noise
+  shortRequestId: true,    // compact IDs
+  logClientIp:    true,    // see who called
+  lineColor:      'level', // colour by outcome not verb
+}
+```
+
+### What each option logs
+
+**`logIncoming: false`** — before and after:
+```
+// Before (default — both lines shown)
+09:44:57.123  [DEBUG]  >>  POST    /users                    [req_019c...]
+09:44:57.125  [INFO]   <<  201  POST    /users        2ms   [req_019c...]
+
+// After (logIncoming: false — arrival hidden)
+09:44:57.125  [INFO]   <<  201  POST    /users        2ms   [req_019c...]
+```
+
+**`shortRequestId: true`** — before and after:
+```
+// Before — full 28-char ID
+09:44:57.125  [INFO]   <<  201  POST    /users        2ms   [req_019cfa6f23691913c86c63a3045a]
+
+// After — last 8 chars only
+09:44:57.125  [INFO]   <<  201  POST    /users        2ms   [3a3045a]
+```
+
+**`logClientIp: true`**:
+```
+09:44:57.125  [INFO]   <<  201  POST    /users        2ms   [req_019c...]  192.168.1.100
+```
+
+**`lineColor: 'level'`** — method column coloured by response status instead of verb colour.
+
+---
+
+## v0.5.x → v0.6.0
+
+No breaking changes. All v0.5.x code is fully compatible. All 4 new options default to the existing behaviour — nothing changes unless you opt in.
+
+### New logger options
+
+```ts
+app.use(shapeguard({
+  logger: {
+    // Hide >> arrival lines — keep only << response lines
+    logIncoming: false,
+
+    // Show last 8 chars of request ID instead of full 28-char ID
+    shortRequestId: true,
+
+    // Log client IP on every response line
+    logClientIp: true,
+
+    // Colour whole line by response status (2xx=green, 4xx=yellow, 5xx=red)
+    // instead of the default method colour (GET=green, POST=cyan, DELETE=red)
+    lineColor: 'level',
+  }
+}))
+```
+
+All four can be combined freely. Each defaults to the existing behaviour when not set.
+
+| Option | Default | Effect when changed |
+|--------|---------|---------------------|
+| `logIncoming` | `true` | `false` hides `>>` arrival lines |
+| `shortRequestId` | `false` | `true` shows last 8 chars only |
+| `logClientIp` | `false` | `true` adds IP to response lines |
+| `lineColor` | `'method'` | `'level'` colours by status code |

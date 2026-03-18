@@ -1,7 +1,7 @@
 // ─────────────────────────────────────────────
-// openapi/index.ts — shapeguard
-// Auto-generate OpenAPI 3.1 spec from defineRoute()
-// definitions. No manual schema duplication.
+// openapi/index.ts — shapeguard v0.5.0
+// Auto-generate OpenAPI 3.1 spec from defineRoute() definitions.
+// Fixes: 422/500 schemas, operationId, tags, summary, prefix, duplicate detection, trailing slash.
 // ─────────────────────────────────────────────
 
 import type { RouteDefinition } from '../validation/define-route.js'
@@ -11,7 +11,18 @@ export interface OpenAPIConfig {
   version:      string
   description?: string
   servers?:     Array<{ url: string; description?: string }>
-  routes:       Record<string, RouteDefinition>
+  prefix?:      string  // Bug 19: applied to all route paths automatically e.g. '/api/v1'
+  routes:       Record<string, RouteDefinition | InlineRouteDefinition>
+}
+
+// Bug 19 / v0.5.0 Feature: inline schema for existing Express apps
+export interface InlineRouteDefinition {
+  summary?:  string
+  tags?:     string[]
+  body?:     unknown
+  response?: unknown
+  params?:   unknown
+  query?:    unknown
 }
 
 export interface OpenAPISpec {
@@ -22,7 +33,9 @@ export interface OpenAPISpec {
 }
 
 interface OpenAPIOperation {
+  operationId?: string
   summary?:     string
+  tags?:        string[]
   parameters?:  OpenAPIParameter[]
   requestBody?: { required: boolean; content: Record<string, { schema: Record<string, unknown> }> }
   responses:    Record<string, { description: string; content?: Record<string, { schema: Record<string, unknown> }> }>
@@ -35,45 +48,79 @@ interface OpenAPIParameter {
   schema:   Record<string, unknown>
 }
 
-/**
- * Generates an OpenAPI 3.1 spec from defineRoute() definitions.
- *
- * @example
- * const spec = generateOpenAPI({
- *   title:   'My API',
- *   version: '1.0.0',
- *   routes: {
- *     'POST /users':     CreateUserRoute,
- *     'GET  /users/:id': GetUserRoute,
- *     'GET  /users':     ListUsersRoute,
- *     'PUT  /users/:id': UpdateUserRoute,
- *     'DELETE /users/:id': DeleteUserRoute,
- *   }
- * })
- * app.get('/docs/openapi.json', (_req, res) => res.json(spec))
- */
+// Bug 17: shared error envelope schema for 422 and 500 responses
+const ERROR_ENVELOPE_SCHEMA: Record<string, unknown> = {
+  type: 'object',
+  properties: {
+    success: { type: 'boolean', example: false },
+    message: { type: 'string' },
+    error: {
+      type: 'object',
+      properties: {
+        code:    { type: 'string' },
+        message: { type: 'string' },
+        details: {},
+      },
+    },
+  },
+}
+
 export function generateOpenAPI(config: OpenAPIConfig): OpenAPISpec {
-  const paths: Record<string, Record<string, OpenAPIOperation>> = {}
+  const paths:  Record<string, Record<string, OpenAPIOperation>> = {}
+  const prefix  = config.prefix ? normalizePath(config.prefix) : ''
+  const seen    = new Set<string>()   // Bug 20: duplicate detection
 
   for (const [routeKey, route] of Object.entries(config.routes)) {
     const parts   = routeKey.trim().split(/\s+/)
     const method  = (parts[0] ?? 'GET').toLowerCase()
     const rawPath = parts[1] ?? '/'
-    // Convert Express :param → OpenAPI {param}
-    const oaPath  = rawPath.replace(/:([^/]+)/g, '{$1}')
+
+    // Bug 21: strip trailing slash, Bug 19: prepend prefix
+    const normalRaw = normalizePath(rawPath)
+    const oaPath    = prefix + normalRaw.replace(/:([^/]+)/g, '{$1}')
+
+    // Bug 20: warn and skip duplicates
+    const dedupeKey = `${method}:${oaPath}`
+    if (seen.has(dedupeKey)) {
+      console.warn(
+        `[shapeguard] generateOpenAPI: duplicate route "${method.toUpperCase()} ${oaPath}" — ` +
+        `first definition kept, second ignored.`
+      )
+      continue
+    }
+    seen.add(dedupeKey)
 
     if (!paths[oaPath]) paths[oaPath] = {}
 
+    // Bug 18: read summary and tags from route definition
+    const r        = route as Record<string, unknown>
+    const summary  = typeof r['summary'] === 'string' ? r['summary'] : undefined
+    const tags     = Array.isArray(r['tags']) ? r['tags'] as string[] : undefined
+
+    // Bug 18: auto-generate stable operationId e.g. POST /users/:id → postUsersId
+    const operationId = generateOperationId(method, normalRaw)
+
     const operation: OpenAPIOperation = {
+      operationId,
       responses: {
         '200': { description: 'Success' },
-        '422': { description: 'Validation error' },
-        '500': { description: 'Internal server error' },
-      }
+        // Bug 17: full error envelope schema on both error responses
+        '422': {
+          description: 'Validation error',
+          content: { 'application/json': { schema: ERROR_ENVELOPE_SCHEMA } },
+        },
+        '500': {
+          description: 'Internal server error',
+          content: { 'application/json': { schema: ERROR_ENVELOPE_SCHEMA } },
+        },
+      },
     }
 
-    // Path params
-    const pathParams = [...rawPath.matchAll(/:([^/]+)/g)].map(m => m[1]!)
+    if (summary) operation.summary = summary
+    if (tags)    operation.tags    = tags
+
+    // Path params from URL pattern
+    const pathParams = [...normalRaw.matchAll(/:([^/]+)/g)].map(m => m[1]!)
     if (pathParams.length > 0) {
       operation.parameters = pathParams.map(name => ({
         name, in: 'path', required: true, schema: { type: 'string' },
@@ -82,14 +129,14 @@ export function generateOpenAPI(config: OpenAPIConfig): OpenAPISpec {
 
     // Query params
     if (route.query) {
-      const shape = extractShape(route.query)
+      const shape   = extractShape(route.query)
       const qParams: OpenAPIParameter[] = Object.entries(shape).map(([name, s]) => ({
         name, in: 'query', required: !isOptional(s), schema: toJsonSchema(s),
       }))
       operation.parameters = [...(operation.parameters ?? []), ...qParams]
     }
 
-    // Request body
+    // Request body (not for GET)
     if (route.body && method !== 'get') {
       operation.requestBody = {
         required: true,
@@ -97,7 +144,7 @@ export function generateOpenAPI(config: OpenAPIConfig): OpenAPISpec {
       }
     }
 
-    // Response
+    // Bug 16 (confirmed): response schema populates data field in 200 envelope
     operation.responses['200'] = {
       description: 'Success',
       content: {
@@ -109,9 +156,9 @@ export function generateOpenAPI(config: OpenAPIConfig): OpenAPISpec {
               message: { type: 'string' },
               data:    route.response ? adapterToJsonSchema(route.response) : { type: 'object' },
             },
-          }
-        }
-      }
+          },
+        },
+      },
     }
 
     paths[oaPath]![method] = operation
@@ -126,10 +173,24 @@ export function generateOpenAPI(config: OpenAPIConfig): OpenAPISpec {
   return spec
 }
 
-// ── Internal helpers ──────────────────────────
+// ── Path normalisation ────────────────────────
+function normalizePath(path: string): string {
+  if (!path.startsWith('/')) path = '/' + path
+  return path.endsWith('/') && path.length > 1 ? path.slice(0, -1) : path
+}
 
-// Typed accessor for Zod internals — avoids as any throughout
-// Zod attaches _def at runtime; we type it minimally here
+// ── operationId generation ────────────────────
+function generateOperationId(method: string, path: string): string {
+  const segments = path
+    .split('/')
+    .filter(Boolean)
+    .map(s => s.startsWith(':') ? s.slice(1) : s)
+    .map(s => s.charAt(0).toUpperCase() + s.slice(1))
+  return method.toLowerCase() + (segments.join('') || 'Root')
+}
+
+// ── Zod introspection helpers ─────────────────
+
 interface ZodDef {
   typeName?:  string
   innerType?: unknown

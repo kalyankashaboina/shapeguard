@@ -84,13 +84,13 @@ export type CreateUserBody = z.infer<typeof CreateUserBodySchema>  // ← repeat
 ```ts
 import { createDTO } from 'shapeguard'
 
-export const CreateUserDTO = createDTO({
+export const CreateUserDTO = createDTO(z.object({
   email:    z.string().email(),
   name:     z.string().min(1).max(100),
   password: z.string().min(8),
-})
+}))
 
-export type CreateUserBody = CreateUserDTO.Input  // ← inferred automatically
+export type CreateUserBody = typeof CreateUserDTO.Input  // ← inferred automatically
 ```
 
 Pass directly to `defineRoute()` — it is a valid Zod schema:
@@ -374,18 +374,18 @@ const UserQuerySchema = z.object({
 })
 
 // ── DTOs ──────────────────────────────────────
-export const CreateUserDTO = createDTO({
+export const CreateUserDTO = createDTO(z.object({
   email:    z.string().email(),
   name:     z.string().min(1).max(100),
   password: z.string().min(8),
   role:     z.enum(['admin', 'member', 'viewer']),
-})
+}))
 
-export const UpdateUserDTO = createDTO({
+export const UpdateUserDTO = createDTO(z.object({
   name:     z.string().min(1).max(100).optional(),
   role:     z.enum(['admin', 'member', 'viewer']).optional(),
   password: z.string().min(8).optional(),
-})
+}))
 
 // ── response ──────────────────────────────────
 const UserResponseSchema = z.object({
