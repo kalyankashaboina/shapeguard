@@ -31,6 +31,7 @@ A production Express app today needs all of these. shapeguard replaces 8 of them
 | `swagger-jsdoc` | OpenAPI from code | `generateOpenAPI()` |
 | `swagger-ui-express` | Swagger UI | `generateOpenAPI()` + serve |
 | `uuid` | Request ID generation | `shapeguard()` built-in |
+| `supertest` (for unit tests) | HTTP integration tests | `mockRequest()` / `mockResponse()` |
 
 ---
 
@@ -64,6 +65,9 @@ router.post('/users', validate(CreateUserRoute), handler)
 // Must work with zero other shapeguard setup
 import { generateOpenAPI } from 'shapeguard'
 const spec = generateOpenAPI({ ... })
+
+// Must work with zero other shapeguard setup
+import { mockRequest, mockResponse } from 'shapeguard/testing'
 ```
 
 A user must be able to adopt one feature at a time and get full value from it immediately.
@@ -114,8 +118,8 @@ Features that only help the full adopter are lowest priority. Features that help
 
 These are not up for debate. If you have a strong argument, open an issue — but the bar is very high.
 
-- **Zod is the primary schema engine.** Joi and Yup adapters exist for migration. New features are designed for Zod only.
-- **Zero required runtime dependencies.** pino is optional. No new required dep will ever be added.
+- **Zod is the primary schema engine.** Joi and Yup adapters exist for migration. Winston adapter bridges logger arg order. New features are designed for Zod only.
+- **Zero required runtime dependencies.** pino is optional. winston is optional. No new required dep will ever be added.
 - **One consistent response envelope.** `{ success, message, data }` and `{ success, message, error }`. This is the contract frontend teams depend on.
 - **Strict semantic versioning.** Patch = bug fixes only. Minor = new features, no breaking changes. Major = breaking changes with migration guide.
 

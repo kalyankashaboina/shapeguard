@@ -419,7 +419,7 @@ with wrong HTTP method. Works with parameterized routes like `/:id`.
 
 ## Per-route rate limiting — `rateLimit` <a name="ratelimit"></a>
 
-> Available on `defineRoute()` — v0.3.0+
+> Available on `defineRoute()`
 
 Built-in rate limiting. No extra package needed. Applied per IP + route path by default.
 
@@ -482,7 +482,7 @@ For high-traffic production multi-instance deployments, provide a Redis store as
 
 ## Per-route cache hints — `cache` <a name="cache"></a>
 
-> Available on `defineRoute()` — v0.3.0+
+> Available on `defineRoute()`
 
 Sets `Cache-Control` response headers declaratively — no manual `res.setHeader` needed.
 
@@ -515,4 +515,3 @@ defineRoute({
 | `maxAge: N` (default public) | Public data — product listings, blog posts |
 | `maxAge: N, private: true` | User-specific data — profile, settings |
 | `noStore: true` | Sensitive — auth tokens, payment pages |
-

@@ -4,6 +4,7 @@
 
 Zero config to start. Fully configurable when you need it.
 Strict by default. Lightweight. Production-ready.
+Works in JavaScript and TypeScript. CommonJS and ESM.
 
 [![npm](https://img.shields.io/npm/v/shapeguard)](https://npmjs.com/package/shapeguard)
 [![bundle size](https://img.shields.io/bundlephobia/minzip/shapeguard)](https://bundlephobia.com/package/shapeguard)
@@ -15,7 +16,7 @@ Strict by default. Lightweight. Production-ready.
 
 ## What's new in v0.6.0
 
-> **Logger control — four new options for precise terminal and log output**
+> **Logger control — four independent options for precise terminal and log output**
 
 ```ts
 app.use(shapeguard({
@@ -69,7 +70,38 @@ npm install shapeguard zod
 npm install pino pino-pretty
 ```
 
-If pino is not installed, shapeguard uses a built-in console logger automatically.
+If pino is not installed, shapeguard uses a built-in console logger with the same format automatically. No config change needed.
+
+---
+
+## The one rule that matters most
+
+**Every piece works standalone. Use only what you need.**
+
+You do not need to adopt everything at once. Each function works independently with zero setup:
+
+```ts
+// Only want typed validation? That's all you need.
+import { validate, defineRoute } from 'shapeguard'
+router.post('/users', validate(CreateUserRoute), handler)
+
+// Only want consistent errors? That's all you need.
+import { AppError, errorHandler } from 'shapeguard'
+app.use(errorHandler())
+throw AppError.notFound('User')
+
+// Only want Swagger for an existing app? That's all you need.
+import { generateOpenAPI } from 'shapeguard'
+const spec = generateOpenAPI({ title: 'My API', version: '1.0.0', routes: { ... } })
+
+// Only want unit-testable controllers? That's all you need.
+import { mockRequest, mockResponse } from 'shapeguard/testing'
+
+// Use all of it? Also fine.
+app.use(shapeguard())
+```
+
+Pick one feature. Get full value from it immediately. Add more when you need them.
 
 ---
 
@@ -77,19 +109,19 @@ If pino is not installed, shapeguard uses a built-in console logger automaticall
 
 ## Peer dependencies
 
-| Package       | Required | Notes                          |
-|---------------|----------|--------------------------------|
-| `express`     | Yes      | Primary target                 |
-| `zod`         | Yes      | Schema validation              |
-| `pino`        | Optional | Richer logging if installed    |
-| `pino-pretty` | Optional | Pretty dev logs with pino      |
+| Package       | Required | Notes                             |
+|---------------|----------|-----------------------------------|
+| `express`     | Yes      | Primary target                    |
+| `zod`         | Yes      | Schema validation                 |
+| `pino`        | Optional | Richer logging if installed       |
+| `pino-pretty` | Optional | Pretty dev logs with pino         |
 | `joi`         | Optional | Via `shapeguard/adapters/joi`     |
 | `yup`         | Optional | Via `shapeguard/adapters/yup`     |
 | `winston`     | Optional | Via `shapeguard/adapters/winston` |
 
 ---
 
-## Quick start
+## Quick start — full setup
 
 ### 1. Mount in app.ts
 
@@ -99,10 +131,10 @@ import { shapeguard, notFoundHandler, errorHandler } from 'shapeguard'
 
 const app = express()
 app.use(express.json())
-app.use(shapeguard())         // logging, requestId, res helpers
+app.use(shapeguard())         // logging, requestId, res helpers — zero config
 app.use('/api/users', userRouter)
-app.use(notFoundHandler())    // 404 — no route matched
-app.use(errorHandler())       // catches everything — always last
+app.use(notFoundHandler())    // 404 for unmatched routes
+app.use(errorHandler())       // catches everything thrown anywhere — always last
 app.listen(3000)
 ```
 
@@ -125,20 +157,20 @@ const UserResponseSchema = z.object({
   email:     z.string(),
   name:      z.string(),
   createdAt: z.string().datetime(),
-  // passwordHash NOT here → stripped automatically
+  // passwordHash NOT here → stripped from response automatically
 })
 
 export const CreateUserRoute = defineRoute({
   body:      CreateUserDTO,
   response:  UserResponseSchema,
-  // optional: transform runs after validation, before your handler
+  // transform runs after validation, before your handler
   transform: async (data) => ({
     ...data,
     password: await bcrypt.hash(data.password, 10),
   }),
 })
 
-export type CreateUserBody = CreateUserDTO.Input  // ← no z.infer needed
+export type CreateUserBody = typeof CreateUserDTO.Input  // ← no z.infer needed
 export type UserResponse   = z.infer<typeof UserResponseSchema>
 ```
 
@@ -149,7 +181,7 @@ import { handle, AppError } from 'shapeguard'
 import { CreateUserRoute } from '../validators/user.validator'
 
 export const createUser = handle(CreateUserRoute, async (req, res) => {
-  req.body.email   // string — typed ✅
+  req.body.email   // string — fully typed ✅
   req.body.isAdmin // TypeScript error — not in schema ✅
 
   const user = await UserService.create(req.body)
@@ -159,8 +191,7 @@ export const createUser = handle(CreateUserRoute, async (req, res) => {
 ```
 
 > `handle()` combines `validate()` + `asyncHandler()` into one call.
-> The two-element array pattern from v0.1.x still works — migrate at your own pace.
-```
+> The two-element array pattern still works — migrate at your own pace.
 
 ### 4. Throw errors from anywhere
 
@@ -170,11 +201,11 @@ import { AppError } from 'shapeguard'
 async create(data: CreateUserBody) {
   const exists = await db.findByEmail(data.email)
   if (exists) throw AppError.conflict('Email')
-  // → client sees "Email already exists" — 409
+  // → client sees { success: false, error: { code: "CONFLICT" } } — 409
 
   return db.create(data)
-  // crash → client sees "Something went wrong" in prod
-  // full stack trace → pino logger only ✅
+  // unhandled crash → client sees "Something went wrong" in prod
+  // full stack trace in logger only — never exposed ✅
 }
 ```
 
@@ -192,9 +223,129 @@ router.get('/',       ...UserController.listUsers)
 router.get('/:id',    ...UserController.getUser)
 router.put('/:id',    ...UserController.updateUser)
 router.delete('/:id', ...UserController.deleteUser)
-// POST /:id → 405, Allow: GET, PUT, DELETE — works for :param routes too
+// POST /:id → 405, Allow: GET, PUT, DELETE — param routes included
 
 export default router
+```
+
+---
+
+## Standalone usage — adopt one piece at a time
+
+### Just validation
+
+No `shapeguard()` needed. Works with any existing Express app.
+
+```ts
+import { validate, defineRoute, AppError, errorHandler } from 'shapeguard'
+import { z } from 'zod'
+
+const CreateUserRoute = defineRoute({
+  body: z.object({ email: z.string().email(), name: z.string() }),
+})
+
+router.post('/users', validate(CreateUserRoute), async (req, res) => {
+  // req.body is typed — email and name guaranteed present and valid
+  res.json({ ok: true })
+})
+
+app.use(errorHandler()) // catches 422 validation errors automatically
+```
+
+### Just error handling
+
+No schemas, no validation. Consistent error shapes across your whole app.
+
+```ts
+import { AppError, errorHandler, isAppError } from 'shapeguard'
+
+// Throw from anywhere — service, middleware, controller
+throw AppError.notFound('User')
+throw AppError.unauthorized()
+throw AppError.conflict('Email')
+throw AppError.custom('PAYMENT_FAILED', 'Payment declined', 402)
+
+app.use(errorHandler({
+  debug: false,                    // hide stack traces in prod
+  errors: {
+    fallbackMessage: 'Server error', // shown for non-operational errors
+    onError: (err, req) => {
+      Sentry.captureException(err)   // hook into your alerting
+    },
+  },
+}))
+```
+
+### Just Swagger — for existing Express apps
+
+No `defineRoute()` needed. Describe schemas inline, routes stay untouched.
+
+```ts
+import { generateOpenAPI } from 'shapeguard'
+import { z } from 'zod'
+import swaggerUi from 'swagger-ui-express'
+
+const spec = generateOpenAPI({
+  title:   'My API',
+  version: '1.0.0',
+  prefix:  '/api/v1',   // prepended to all paths — write once
+  routes: {
+    'POST /users': {
+      summary: 'Create a new user',
+      tags:    ['Users'],
+      body:     z.object({ email: z.string().email(), name: z.string() }),
+      response: z.object({ id: z.string(), email: z.string() }),
+    },
+    'GET /users/:id': {
+      summary: 'Get user by ID',
+      tags:    ['Users'],
+      response: z.object({ id: z.string(), email: z.string(), name: z.string() }),
+    },
+  },
+})
+
+// Serve Swagger UI
+app.use('/docs', swaggerUi.serve, swaggerUi.setup(spec))
+// Serve raw JSON spec (Postman, Insomnia, etc.)
+app.get('/docs/openapi.json', (_req, res) => res.json(spec))
+```
+
+Your existing routes are untouched. You only describe them for the spec.
+
+### Just unit testing
+
+No HTTP server needed. Test controllers in pure Node.
+
+```ts
+import { mockRequest, mockResponse, mockNext } from 'shapeguard/testing'
+import { createUser } from '../controllers/user.controller'
+
+it('returns 201 with user data', async () => {
+  const req  = mockRequest({ body: { email: 'alice@example.com', name: 'Alice' } })
+  const res  = mockResponse()
+  const next = mockNext()
+
+  await createUser(req, res, next)
+
+  expect(res._result().statusCode).toBe(201)
+  expect(res._result().body.data.email).toBe('alice@example.com')
+  expect(next.called).toBe(false)
+})
+```
+
+### Just Winston logging
+
+```ts
+import winston from 'winston'
+import { winstonAdapter } from 'shapeguard/adapters/winston'
+
+const wLogger = winston.createLogger({
+  transports: [new winston.transports.Console()],
+})
+
+app.use(shapeguard({
+  logger: { instance: winstonAdapter(wLogger) },
+}))
 ```
 
 ---
@@ -204,28 +355,28 @@ export default router
 ```
 shapeguard() mounted
   ✅ Structured logging          dev: pretty  |  prod: JSON lines
-  ✅ Time-ordered requestId      every request, traceable in logs
-  ✅ Request logging             method, endpoint (not path), status, duration
+  ✅ Time-ordered requestId      every request, traceable end-to-end
+  ✅ Request logging             method, endpoint pattern, status, duration
   ✅ res helpers                 res.ok / res.created / res.fail on every route
-  ✅ Default redaction           passwords, tokens, cookies never logged
+  ✅ Default redaction           passwords, tokens, cookies never appear in logs
 
 validate() on a route
-  ✅ req.body typed              no more any
-  ✅ Unknown fields stripped     silently — passwordHash gone before service runs
-  ✅ Fail fast                   first invalid field → 422 → handler never runs
+  ✅ req.body typed              no more any — full IDE autocomplete
+  ✅ Unknown fields stripped     passwordHash gone before handler runs
+  ✅ Fail fast                   first invalid field → 422 → handler never called
   ✅ Response stripping          response schema removes server-only fields
-  ✅ Pre-parse guards            proto pollution, depth DoS, size limits
+  ✅ Pre-parse guards            proto pollution, depth DoS, array/string size limits
 
 AppError thrown anywhere
-  ✅ errorHandler catches it     always consistent response shape
+  ✅ errorHandler catches it     always consistent { success, message, error } shape
   ✅ Operational → shown         client sees your message
-  ✅ Programmer → hidden in prod "Something went wrong"
+  ✅ Programmer → hidden in prod "Something went wrong" — stack in logs only
 
 errorHandler() mounted
   ✅ One error shape always      frontend writes one handler — forever
   ✅ 4xx → logger.warn           expected, low noise
-  ✅ 5xx → logger.error + stack  unexpected, full detail
-  ✅ onError hook                Sentry, Datadog, alerting
+  ✅ 5xx → logger.error + stack  unexpected, full detail for debugging
+  ✅ onError hook                plug in Sentry, Datadog, PagerDuty
 ```
 
 ---
@@ -235,16 +386,19 @@ errorHandler() mounted
 ![Response shapes](./assets/shapeguard-response-shapes.svg)
 
 ```ts
-// SUCCESS
-{ "success": true,  "message": "User created", "data": { ... } }
+// SUCCESS — res.ok() / res.created() / res.paginated()
+{ "success": true, "message": "User created", "data": { "id": "...", "email": "..." } }
 
-// ERROR
+// PAGINATED — res.paginated()
+{ "success": true, "message": "", "data": { "items": [...], "total": 42, "page": 1, "limit": 20, "pages": 3 } }
+
+// ERROR — thrown AppError or validation failure
 { "success": false, "message": "Validation failed",
-  "error": { "code": "VALIDATION_ERROR", "message": "...",
-             "details": { "field": "email", "message": "Invalid email" }}}
+  "error": { "code": "VALIDATION_ERROR", "message": "Validation failed",
+             "details": { "field": "email", "message": "Invalid email" } } }
 ```
 
-Frontend writes this once, forever:
+Frontend writes this once and handles every endpoint:
 
 ```ts
 const { success, data, error } = response.data
@@ -258,142 +412,95 @@ if (!success) handleError(error.code, error.message)
 ![Logging output](./assets/shapeguard-logging.svg)
 
 ```
-# Development — human readable, color-coded level badges, one line per request
+# Development — human readable, colour-coded, one line per event
 09:44:57.123  [DEBUG]  >>  POST    /api/v1/users                       [req_019c...]
 09:44:57.125  [INFO]   <<  201  POST    /api/v1/users           2ms   [req_019c...]
 09:44:57.400  [WARN]   <<  404  GET     /api/v1/users/xx       12ms   [req_019c...]
 09:44:57.900  [ERROR]  <<  500  GET     /api/v1/crash           1ms   [req_019c...]
 09:44:57.800  [WARN]   <<  200  GET     /api/v1/data         1523ms   [req_019c...]  SLOW
 
-# Production — one JSON line per event (Datadog / CloudWatch / Loki ready)
+# Production — one JSON line per event (Datadog / CloudWatch / Loki / Splunk ready)
 {"level":"info","time":"...","requestId":"req_019c...","method":"POST","endpoint":"/api/v1/users","status":201,"duration_ms":2}
 ```
 
-`>>` = request arriving at server &nbsp;|&nbsp; `<<` = response leaving server
+`>>` = request arriving &nbsp;|&nbsp; `<<` = response leaving &nbsp;|&nbsp; `SLOW` = exceeded `slowThreshold`
 
-### Request ID config
+### Logger config
 
 ```ts
 app.use(shapeguard({
-  requestId: {
-    // Read trace ID from upstream first (load balancer / API gateway / CDN).
-    // Falls back to generating a fresh req_<ts><random> ID if header is absent.
-    header: 'x-request-id',        // default. Change to 'x-trace-id', 'x-correlation-id', etc.
-
-    // Custom generator — replace built-in format
-    // generator: () => `trace-${crypto.randomUUID()}`,
-
-    // Disable entirely — req.id will be '' and no ID appears in logs
-    // enabled: false,
-  },
   logger: {
-    logRequestId:   true,           // show [req_id] on every log line (default: true)
-    logAllRequests: true,           // log every request, not just errors (default: true in dev)
-    slowThreshold:  1000,           // SLOW warning if response >= 1000ms
+    // Output control
+    logAllRequests:  true,    // log every request (default: true dev, false prod — errors+slow only)
+    logIncoming:     true,    // show >> arrival lines (default: true)
+    slowThreshold:   500,     // SLOW warning threshold ms (default: 500 dev, 1000 prod)
+
+    // Request ID display
+    logRequestId:    true,    // show [req_id] on every line (default: true)
+    shortRequestId:  false,   // show last 8 chars only — [3a3045a] (default: false)
+
+    // Extra fields
+    logClientIp:     false,   // log client IP on response lines (default: false)
+
+    // Colour mode (dev/pretty output only)
+    lineColor:       'method', // 'method' = colour by verb | 'level' = colour by status
+
+    // Body logging — off by default (security risk)
+    logRequestBody:  false,   // include req.body (auto-redacted)
+    logResponseBody: false,   // include response body
+
+    // Bring your own logger (pino, winston, console-compatible)
+    // instance: winstonAdapter(wLogger),
+
+    // Suppress all logs — useful in test environments
+    // silent: true,
+  },
+  requestId: {
+    header:    'x-request-id',          // read from upstream (load balancer / gateway)
+    // generator: () => crypto.randomUUID(),  // custom ID format
+    // enabled:   false,                      // disable entirely
   },
   response: {
-    includeRequestId: true,         // send X-Request-Id header on every response
+    includeRequestId: true,   // send X-Request-Id header on every response
   },
-}))
-```
-
-### Optional body logging
-
-```ts
-app.use(shapeguard({
-  logger: {
-    logRequestBody:  true,   // include req.body in log (auto-redacted: passwords/tokens never logged)
-    logResponseBody: true,   // include response JSON in log
-  }
 }))
 ```
 
 ---
 
-## Full API
+## OpenAPI / Swagger
 
-### Tier 1 — daily use
-
-```ts
-import {
-
-  generateOpenAPI,   // generate OpenAPI 3.1 spec from route definitions
-
-  handle,            // validate + asyncHandler in one — recommended
-  validate,          // request validation + response stripping
-  asyncHandler,      // async route safety for Express 4
-  AppError,          // throw errors from anywhere
-  defineRoute,       // bundle schemas — single source of truth
-  createDTO,         // z.object() wrapper with auto type inference
-  isAppError,        // type guard
-  ErrorCode,         // stable error code constants
-} from 'shapeguard'
-```
-
-### Tier 2 — setup once
+Auto-generate an OpenAPI 3.1 spec. Zero manual schema duplication.
 
 ```ts
-import {
-  shapeguard,        // main middleware — mount in app.ts
-  errorHandler,      // centralised error handler — always last
-  notFoundHandler,   // 404 for unmatched routes
-  createRouter,      // drop-in router with auto 405
-} from 'shapeguard'
+import { generateOpenAPI } from 'shapeguard'
+import swaggerUi from 'swagger-ui-express'
+
+const spec = generateOpenAPI({
+  title:   'My API',
+  version: '1.0.0',
+  prefix:  '/api/v1',             // written once, applied to all routes
+  routes: {
+    'POST /users': {
+      ...defineRoute({ body: CreateUserDTO, response: UserResponseSchema }),
+      summary: 'Create a new user',
+      tags:    ['Users'],
+    },
+    'GET /users/:id': {
+      summary:  'Get user by ID',
+      tags:     ['Users'],
+      response: UserResponseSchema,
+    },
+  },
+})
+
+app.use('/docs', swaggerUi.serve, swaggerUi.setup(spec))
+app.get('/docs/openapi.json', (_req, res) => res.json(spec))
 ```
 
-### Tier 3 — adapters and special cases
+Each operation gets a stable `operationId` automatically (`POST /users` → `postUsers`). Duplicate paths are warned. Trailing slashes are normalised.
 
-```ts
-import {
-  withShape,         // custom response shape per route
-  zodAdapter,        // wrap zod schemas manually
-  isZodSchema,       // detect zod schemas
-} from 'shapeguard'
-
-// Schema adapters — Joi, Yup, Winston
-import { joiAdapter }     from 'shapeguard/adapters/joi'
-import { yupAdapter }     from 'shapeguard/adapters/yup'
-import { winstonAdapter } from 'shapeguard/adapters/winston'
-
-// Testing helpers
-import { mockRequest, mockResponse, mockNext } from 'shapeguard/testing'
-```
-
-### Types
-
-```ts
-import type {
-  ShapeguardConfig,   // shapeguard() config
-  LoggerConfig,       // logger sub-config
-  ValidationConfig,   // validation sub-config
-  ResponseConfig,     // response sub-config
-  ErrorsConfig,       // errors sub-config
-  SchemaAdapter,      // adapter interface for custom schemas
-  RouteSchema,        // defineRoute() shape
-  SuccessEnvelope,    // { success: true, message, data }
-  ErrorEnvelope,      // { success: false, message, error }
-  Envelope,           // union of both
-  PaginatedData,      // paginated data shape
-  ValidationIssue,    // { field, message, code }
-  Logger,             // { info, warn, error, debug }
-  LogLevel,           // 'debug' | 'info' | 'warn' | 'error'
-
-  // Type inference from defineRoute() output
-  InferBody,          // type Body = InferBody<typeof MyRoute>
-  InferParams,        // type Params = InferParams<typeof MyRoute>
-  InferQuery,         // type Query = InferQuery<typeof MyRoute>
-  InferHeaders,       // type Headers = InferHeaders<typeof MyRoute>
-} from 'shapeguard'
-```
-
-### Adapters
-
-```ts
-// Joi
-import { joiAdapter } from 'shapeguard/adapters/joi'
-// Yup
-import { yupAdapter } from 'shapeguard/adapters/yup'
-```
+→ [Full OpenAPI docs](./docs/OPENAPI.md)
 
 ---
 
@@ -403,22 +510,106 @@ import { yupAdapter } from 'shapeguard/adapters/yup'
 
 | Threat | Default | Configurable |
 |--------|---------|--------------|
-| Proto pollution (`__proto__`) | Stripped | No — always blocked |
-| Unicode injection (null bytes, RTL) | Stripped | No — always cleaned |
-| Object depth DoS | 20 levels | Yes — per-route or global |
-| Array size DoS | 1000 items | Yes |
-| String size DoS | 10,000 chars | Yes |
-| Missing Content-Type | 415 error | No — always enforced |
-| Sensitive fields in logs | `[REDACTED]` | Add more paths |
-| Programmer errors in prod | Hidden | `fallbackMessage` to customise |
+| Proto pollution (`__proto__`, `constructor`) | Stripped always | No — security invariant |
+| Unicode injection (null bytes, RTL override) | Stripped always | No — security invariant |
+| Object depth DoS | 20 levels max | Yes — per-route or global |
+| Array size DoS | 1000 items max | Yes |
+| String size DoS | 10,000 chars max | Yes |
+| Missing Content-Type on POST/PUT/PATCH | 415 error | No — always enforced |
+| Sensitive fields in logs | `[REDACTED]` | Add more paths via `redact` |
+| Programmer errors in prod | Message hidden | `fallbackMessage` to customise |
+
+---
+
+## Full API reference
+
+### Tier 1 — daily use
+
+```ts
+import {
+  handle,            // validate + asyncHandler in one — recommended
+  validate,          // request validation + response stripping middleware
+  asyncHandler,      // async safety wrapper for Express 4
+  AppError,          // throw typed errors from anywhere in your app
+  defineRoute,       // bundle all schemas for a route into one reusable object
+  createDTO,         // z.object() wrapper with automatic TypeScript type inference
+  generateOpenAPI,   // generate OpenAPI 3.1 spec from route definitions
+  isAppError,        // type guard — check if unknown is AppError
+  ErrorCode,         // stable error code string constants
+} from 'shapeguard'
+```
+
+### Tier 2 — mount once
+
+```ts
+import {
+  shapeguard,        // main middleware — logging, requestId, res helpers
+  errorHandler,      // centralised error handler — always mount last
+  notFoundHandler,   // 404 handler for unmatched routes
+  createRouter,      // drop-in for express.Router() with auto 405
+} from 'shapeguard'
+```
+
+### Tier 3 — adapters and special cases
+
+```ts
+import {
+  withShape,         // override response shape for a specific route
+  zodAdapter,        // manually wrap a Zod schema into a SchemaAdapter
+  isZodSchema,       // detect whether a value is a Zod schema
+} from 'shapeguard'
+
+// Schema library adapters
+import { joiAdapter }     from 'shapeguard/adapters/joi'      // Joi → SchemaAdapter
+import { yupAdapter }     from 'shapeguard/adapters/yup'      // Yup → SchemaAdapter
+import { winstonAdapter } from 'shapeguard/adapters/winston'  // Winston → Logger
+
+// Testing utilities — no Express, no HTTP needed
+import { mockRequest, mockResponse, mockNext } from 'shapeguard/testing'
+```
+
+### TypeScript types
+
+```ts
+import type {
+  // Config
+  ShapeguardConfig,    // full shapeguard() config
+  LoggerConfig,        // logger sub-config
+  ValidationConfig,    // validation sub-config
+  ResponseConfig,      // response sub-config
+  ErrorsConfig,        // error handler sub-config
+
+  // Schema
+  SchemaAdapter,       // interface for custom schema adapters
+  RouteSchema,         // defineRoute() result shape
+  SafeParseResult,     // adapter parse result
+  ValidationIssue,     // { field, message, code }
+
+  // Response envelopes
+  SuccessEnvelope,     // { success: true, message, data }
+  ErrorEnvelope,       // { success: false, message, error }
+  Envelope,            // SuccessEnvelope | ErrorEnvelope
+  PaginatedData,       // { items, total, page, limit, pages }
+
+  // Logger
+  Logger,              // { info, warn, error, debug }
+  LogLevel,            // 'debug' | 'info' | 'warn' | 'error'
+
+  // Type inference helpers — extract types from defineRoute() output
+  InferBody,           // type Body    = InferBody<typeof MyRoute>
+  InferParams,         // type Params  = InferParams<typeof MyRoute>
+  InferQuery,          // type Query   = InferQuery<typeof MyRoute>
+  InferHeaders,        // type Headers = InferHeaders<typeof MyRoute>
+} from 'shapeguard'
+```
 
 ---
 
 ## Bundle size
 
 ```
-shapeguard core   ~12kb gzip   — zero heavy deps, tree-shakeable
-pino (optional)   ~8kb  gzip   — adds structured JSON logging
+shapeguard core   ~12kb gzip   — zero required runtime dependencies, tree-shakeable
+pino (optional)   ~8kb  gzip   — structured JSON logging
 total             ~20kb gzip
 ```
 
@@ -428,13 +619,13 @@ total             ~20kb gzip
 
 | Doc | What's inside |
 |-----|---------------|
-| [VALIDATION.md](./docs/VALIDATION.md) | validate(), handle(), defineRoute(), createDTO(), transform, rateLimit, cache, Joi/Yup adapters |
-| [OPENAPI.md](./docs/OPENAPI.md) | generateOpenAPI(), prefix, operationId, tags, summary, inline schemas, Swagger UI |
+| [VALIDATION.md](./docs/VALIDATION.md) | validate(), handle(), defineRoute(), createDTO(), transform, allErrors, rateLimit, cache, Joi/Yup adapters |
+| [OPENAPI.md](./docs/OPENAPI.md) | generateOpenAPI(), prefix, operationId, tags, summary, inline schemas, Swagger UI setup |
 | [TESTING.md](./docs/TESTING.md) | mockRequest(), mockResponse(), mockNext(), unit testing controllers without Express |
-| [ERRORS.md](./docs/ERRORS.md) | AppError, errorHandler, error codes, operational vs programmer errors |
+| [ERRORS.md](./docs/ERRORS.md) | AppError, errorHandler, all error codes, operational vs programmer errors |
 | [LOGGING.md](./docs/LOGGING.md) | pino, requestId, logIncoming, shortRequestId, logClientIp, lineColor, Winston adapter |
-| [RESPONSE.md](./docs/RESPONSE.md) | res.ok, res.created, res.paginated, withShape, response envelope |
-| [CONFIGURATION.md](./docs/CONFIGURATION.md) | every config option with defaults, global vs per-route |
+| [RESPONSE.md](./docs/RESPONSE.md) | res.ok, res.created, res.paginated, withShape, full response envelope reference |
+| [CONFIGURATION.md](./docs/CONFIGURATION.md) | every config option with defaults, type signatures, global vs per-route |
 | [MIGRATION.md](./MIGRATION.md) | upgrade guides v0.1.x → v0.2.0 → v0.3.0 → v0.3.1 → v0.4.0 → v0.5.0 → v0.6.0 |
 | [CHANGELOG.md](./CHANGELOG.md) | full version history |
 
@@ -444,15 +635,15 @@ total             ~20kb gzip
 
 | Example | What it shows |
 |---------|---------------|
-| [basic-crud-api](./examples/basic-crud-api/) | Full CRUD app — all features working together |
-| [handle-and-dto](./examples/handle-and-dto/) | `handle()` + `createDTO()` — less boilerplate |
+| [basic-crud-api](./examples/basic-crud-api/) | Full CRUD app — all features working together end to end |
+| [handle-and-dto](./examples/handle-and-dto/) | `handle()` + `createDTO()` — less boilerplate per route |
 | [transform-hook](./examples/transform-hook/) | Password hashing, slug generation via `transform` |
 | [global-config](./examples/global-config/) | `validation.strings`, `logger.silent`, custom request ID |
-| [with-openapi](./examples/with-openapi/) | `generateOpenAPI()` + Swagger UI |
-| [with-testing](./examples/with-testing/) | `mockRequest()` / `mockResponse()` unit tests |
+| [with-openapi](./examples/with-openapi/) | `generateOpenAPI()` + Swagger UI — full working example |
+| [with-testing](./examples/with-testing/) | `mockRequest()` / `mockResponse()` controller unit tests |
 
 ---
 
 ## License
 
-MIT © 2026  [Kalyan Kashaboina](https://github.com/kalyankashaboina)
+MIT © 2026 [Kalyan Kashaboina](https://github.com/kalyankashaboina)
