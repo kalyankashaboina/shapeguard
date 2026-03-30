@@ -134,3 +134,80 @@ These are not up for debate. If you have a strong argument, open an issue — bu
 5. Run `npm test` and `npm run typecheck` — both must pass
 6. Update `CHANGELOG.md` under `[Unreleased]`
 7. Open a pull request — one thing per PR
+
+---
+
+## Development setup
+
+### Local (recommended)
+
+```bash
+git clone https://github.com/kalyankashaboina/shapeguard.git
+cd shapeguard
+npm install
+npm test          # run tests
+npm run typecheck # check types
+npm run build     # build dist/
+```
+
+### Docker (zero local Node.js setup)
+
+```bash
+# Run the full example app with Swagger UI
+docker compose up
+
+# Open http://localhost:3000/docs
+```
+
+See `docker-compose.yml` for all available services (app, Redis, Redis UI).
+
+---
+
+## CI pipeline
+
+Every PR runs:
+
+| Check | Command | Required |
+|-------|---------|----------|
+| TypeScript | `npm run typecheck` | ✅ |
+| Tests | `npm test` | ✅ |
+| Build | `npm run build` | ✅ |
+| Bundle size | `node scripts/size.mjs` | ✅ (< 50 KB) |
+| CodeQL | automatic | ✅ |
+| Changelog | `CHANGELOG.md` touched | ⚠️ warning |
+
+The `release.yml` workflow handles npm publishing automatically when a version tag is pushed.
+
+---
+
+## Release process
+
+Only maintainers can release. The flow:
+
+```bash
+# 1. Run the dry-run validator (Windows) — catches all issues before release
+.\validate-release.ps1
+
+# 2. Update package.json version
+npm version patch   # or minor / major
+
+# 3. Update CHANGELOG.md — move [Unreleased] entries to the new version heading
+
+# 4. Push tag — triggers release.yml
+git push origin main --tags
+```
+
+### `validate-release.ps1` (Windows dry-run)
+
+Run `.\validate-release.ps1` before any release. It validates:
+- `package.json` is valid JSON and version is correct
+- Node.js and npm are available and satisfy engine requirements
+- TypeScript type check passes (`tsc --noEmit`)
+- Full test suite passes (`vitest run`)
+- Build succeeds (`tsup`)
+- All expected dist files exist
+- Bundle size is within the 50 KB budget
+
+Nothing is committed, tagged, or published. It is a read-only pre-flight check.
+
+The CI `release.yml` then: validates the tag matches `package.json`, runs tests, builds, publishes to npm with provenance, and creates a GitHub Release with the changelog excerpt.

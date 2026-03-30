@@ -1,17 +1,18 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// examples/with-openapi
-// Shows generateOpenAPI() — zero manual schema duplication.
-// Your defineRoute() definitions become your API spec.
+// examples/with-openapi — v0.7.0
+// Shows generateOpenAPI() with security schemes + createDocs() Swagger UI.
+// Your defineRoute() definitions become your API spec — zero duplication.
 //
 // Run: npx tsx src/index.ts
-// Open: http://localhost:3000/docs/openapi.json
+// Open: http://localhost:3000/docs          — Swagger UI (dark theme)
+// Open: http://localhost:3000/docs/openapi.json — raw spec JSON
 // ─────────────────────────────────────────────────────────────────────────────
 
 import express from 'express'
 import { z } from 'zod'
 import {
   shapeguard, createDTO, defineRoute, handle,
-  generateOpenAPI, AppError, createRouter,
+  generateOpenAPI, createDocs, AppError, createRouter,
   notFoundHandler, errorHandler,
 } from 'shapeguard'
 
@@ -50,19 +51,34 @@ const ListUsersRoute  = defineRoute({ query:  UserQuerySchema })
 const UpdateUserRoute = defineRoute({ params: UserParamsSchema, body: CreateUserDTO, response: UserResponseSchema })
 const DeleteUserRoute = defineRoute({ params: UserParamsSchema })
 
-// ── OpenAPI spec — generated from route definitions, zero duplication ──────────
+// ── OpenAPI spec ──────────────────────────────────────────────────────────────
+// Security schemes: the padlock button in Swagger UI is now fully functional.
+// defaultSecurity applies bearer to every route; override per-route via security: []
 const spec = generateOpenAPI({
   title:       'shapeguard Users API',
   version:     '1.0.0',
-  description: 'Example API showing auto-generated OpenAPI spec from defineRoute() definitions',
+  description: 'Example API showing auto-generated OpenAPI spec with security schemes',
   servers:     [{ url: 'http://localhost:3000', description: 'Local development' }],
+
+  security: {
+    bearer: {
+      type:         'http',
+      scheme:       'bearer',
+      bearerFormat: 'JWT',
+    },
+  },
+  defaultSecurity: ['bearer'],
+
   routes: {
-    'POST   /api/users':     CreateUserRoute,
-    'GET    /api/users':     ListUsersRoute,
-    'GET    /api/users/:id': GetUserRoute,
-    'PUT    /api/users/:id': UpdateUserRoute,
-    'DELETE /api/users/:id': DeleteUserRoute,
-  }
+    // Public endpoints — no auth required
+    'POST   /api/users': { ...CreateUserRoute, summary: 'Register',   tags: ['Users'], security: [] },
+    'GET    /api/users': { ...ListUsersRoute,  summary: 'List users', tags: ['Users'], security: [] },
+
+    // Protected endpoints — require bearer JWT
+    'GET    /api/users/:id': { ...GetUserRoute,    summary: 'Get user',    tags: ['Users'] },
+    'PUT    /api/users/:id': { ...UpdateUserRoute, summary: 'Update user', tags: ['Users'] },
+    'DELETE /api/users/:id': { ...DeleteUserRoute, summary: 'Delete user', tags: ['Users'] },
+  },
 })
 
 // ── In-memory store ───────────────────────────────────────────────────────────
@@ -98,20 +114,28 @@ const deleteUser = handle(DeleteUserRoute, async (req, res) => {
 const app    = express()
 const router = createRouter()
 
-router.post('/',    ...createUser)
-router.get('/',     ...listUsers)
-router.get('/:id',  ...getUser)
+router.post('/',      ...createUser)
+router.get('/',       ...listUsers)
+router.get('/:id',    ...getUser)
 router.delete('/:id', ...deleteUser)
 
 app.use(express.json())
 app.use(shapeguard())
 app.use('/api/users', router)
+
+// Raw spec JSON — import into Postman, Insomnia, Stoplight, etc.
 app.get('/docs/openapi.json', (_req, res) => res.json(spec))
+
+// Swagger UI — dark theme, padlock works, no extra npm packages needed
+app.use('/docs', createDocs({ spec, title: 'shapeguard Users API', theme: 'dark' }))
+
 app.use(notFoundHandler())
 app.use(errorHandler())
 
 app.listen(3000, () => {
   console.log('with-openapi example → http://localhost:3000')
-  console.log('OpenAPI spec → http://localhost:3000/docs/openapi.json')
-  console.log('Import the JSON into Postman or Insomnia for instant API testing')
+  console.log('Swagger UI → http://localhost:3000/docs')
+  console.log('OpenAPI JSON → http://localhost:3000/docs/openapi.json')
+  console.log()
+  console.log('Click the padlock in Swagger UI and enter a JWT to test protected routes.')
 })

@@ -100,7 +100,7 @@ res.noContent()
 
 ### res.paginated()
 
-List response. Requires `pagination: true` in shapeguard config.
+Offset-based pagination. Best for small-to-medium datasets with known total count.
 
 ```ts
 res.paginated({
@@ -122,6 +122,61 @@ res.paginated({
 //   }
 // }
 ```
+
+### res.cursorPaginated()
+
+Cursor-based pagination. Enterprise standard for large datasets, real-time feeds, and infinite scroll.
+Unlike offset pagination, cursor pagination remains stable when data is added or removed between pages.
+
+```ts
+res.cursorPaginated({
+  data:        users,                       // array of items
+  nextCursor:  users.at(-1)?.id ?? null,   // cursor pointing to next page
+  prevCursor:  req.query.cursor ?? null,   // cursor pointing to previous page (optional)
+  hasMore:     users.length === limit,      // whether more pages exist
+  total:       1000,                        // optional — omit when count is expensive
+  message:     'Users found',              // optional
+})
+// HTTP 200
+// {
+//   "success": true,
+//   "message": "Users found",
+//   "data": {
+//     "items":      [ ... ],
+//     "nextCursor": "user_abc123",
+//     "prevCursor": null,
+//     "hasMore":    true,
+//     "total":      1000        ← only present when provided
+//   }
+// }
+```
+
+**Consuming cursor pages:**
+```ts
+// GET /users?cursor=user_abc123&limit=20
+const cursor = req.query.cursor as string | undefined
+const users  = await db.users.findMany({
+  take:   limit + 1,                    // fetch one extra to detect hasMore
+  cursor: cursor ? { id: cursor } : undefined,
+  skip:   cursor ? 1 : 0,
+  orderBy: { id: 'asc' },
+})
+const hasMore = users.length > limit
+res.cursorPaginated({
+  data:       users.slice(0, limit),
+  nextCursor: hasMore ? users[limit - 1]!.id : null,
+  hasMore,
+})
+```
+
+**When to use which:**
+
+| Scenario | Use |
+|---|---|
+| Admin tables, report exports | `res.paginated()` — offset, known total |
+| Social feeds, activity streams | `res.cursorPaginated()` — stable under inserts |
+| Infinite scroll, mobile apps | `res.cursorPaginated()` — no page-number concept |
+| Search results | `res.paginated()` — users expect page numbers |
 
 ### res.fail()
 
@@ -433,3 +488,47 @@ res.ok({ data: user, status: 202 })      // explicit override
 res.created({ data: user })              // always 201, ignores config
 res.noContent()                          // always 204, ignores config
 ```
+
+---
+
+## Middleware ordering: withShape() and validate() <a name="middleware-ordering"></a>
+
+> **BUG #12 fix** — documented here to prevent a silent security hole.
+
+Both `withShape()` and `validate({ response: ... })` patch `res.json()` by wrapping it.
+The last one to run in the middleware chain becomes the outermost wrapper — and the
+outermost wrapper runs first when `res.json()` is eventually called by the handler.
+
+**Correct order — validate() first, then withShape():**
+
+```ts
+router.get('/users/:id',
+  validate(GetUserRoute),   // ← runs first: registers strip wrapper (inner)
+  withShape({ result: '{data}' }),  // ← runs second: registers shape wrapper (outer)
+  handler,
+)
+```
+
+Call sequence when `res.json(body)` fires:
+1. `withShape` wrapper intercepts → transforms the envelope
+2. Calls the inner (strip) wrapper → strips sensitive fields from `result`
+3. Calls the original `res.json` → sends the final response
+
+**Wrong order — withShape() first, validate() second:**
+
+```ts
+router.get('/users/:id',
+  withShape({ result: '{data}' }),  // ← runs first: inner wrapper
+  validate(GetUserRoute),           // ← runs second: outer wrapper — checks for 'data' key
+  handler,
+)
+// patchResponseStrip looks for 'data' in the already-shaped body.
+// The key is now 'result'. Strip is silently skipped. Sensitive fields leak.
+```
+
+**Rule:** always mount `validate()` before `withShape()` on the same route.
+
+> Note: when using `response.shape` in global `shapeguard()` config instead of
+> per-route `withShape()`, this ordering issue does not apply — shapeguard's
+> `patchResponseStrip` automatically resolves the correct data key from the
+> global shape config (fixed in v0.6.1).

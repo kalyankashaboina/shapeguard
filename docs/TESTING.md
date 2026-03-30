@@ -169,3 +169,62 @@ describe('UserController.createUser', () => {
   })
 })
 ```
+
+---
+
+## Testing response stripping (async behaviour) <a name="testing-strip"></a>
+
+`validate({ response: ... })` strips unknown fields from the response asynchronously.
+When writing unit tests that assert on the exact response body after stripping,
+you need to wait for the strip promise to resolve before reading `res.body`.
+
+### The problem
+
+```ts
+const res = mockResponse()
+await validate(GetUserRoute)(req, res, next)
+await handler(req, res, next)
+
+// ❌ WRONG — body may be read before the async strip finishes
+expect(res.body).not.toHaveProperty('passwordHash')
+```
+
+### The fix — await a tick after calling the handler
+
+```ts
+const res = mockResponse()
+await validate(GetUserRoute)(req, res, next)
+await handler(req, res, next)
+
+// ✅ CORRECT — flush the microtask queue so the strip .then() runs
+await Promise.resolve()
+
+expect(res.body).not.toHaveProperty('passwordHash')
+expect(res.body).toMatchObject({ email: 'alice@example.com' })
+```
+
+### Why `await Promise.resolve()` works
+
+`patchResponseStrip` calls `responseSchema.strip(data)` which returns a Promise.
+After your handler calls `res.json(body)`, the strip runs in the next microtask.
+`await Promise.resolve()` yields to the microtask queue, letting the `.then()` run
+before your assertions execute.
+
+### Integration tests (supertest)
+
+In integration tests using `supertest`, this is handled automatically — the HTTP
+response is not sent until the strip promise resolves, so `await request(app).get('/users/1')`
+always returns the fully-stripped body. No extra `await` needed.
+
+```ts
+// ✅ Integration test — always sees post-strip body
+const res = await request(app).get('/users/1')
+expect(res.body.data).not.toHaveProperty('passwordHash')
+```
+
+### Note on `logResponseBody`
+
+When `logResponseBody: true` is configured, the logger captures the body from
+the inner `res.json` wrapper — which is called by the strip promise's `.then()`.
+So logs always show the **post-strip** body (what the client actually received),
+not the pre-strip body. This is correct behaviour, not a bug.

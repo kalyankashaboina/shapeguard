@@ -59,18 +59,17 @@ export interface DefineRouteInput {
   /**
    * Cache hints — sets Cache-Control header on responses.
    *
+   * Use `noStore: true` alone to disable caching entirely (maxAge not required).
+   * Use `maxAge` for standard browser/CDN caching with optional CDN-specific directives.
+   *
    * @example
-   * defineRoute({
-   *   params:   UserParamsSchema,
-   *   response: UserResponseSchema,
-   *   cache:    { maxAge: 60, private: true }
-   * })
+   * defineRoute({ cache: { maxAge: 60, private: true } })
+   * // CDN-optimised:
+   * defineRoute({ cache: { maxAge: 60, sMaxAge: 300, staleWhileRevalidate: 60 } })
+   * // Never cache:
+   * defineRoute({ cache: { noStore: true } })
    */
-  cache?: {
-    maxAge:   number   // seconds
-    private?: boolean  // Cache-Control: private
-    noStore?: boolean  // Cache-Control: no-store (overrides maxAge)
-  }
+  cache?: { noStore: true; maxAge?: number; private?: boolean } | { maxAge: number; private?: boolean; noStore?: boolean; sMaxAge?: number; staleWhileRevalidate?: number }
 }
 
 export interface RouteDefinition extends RouteSchema {
@@ -82,7 +81,7 @@ export interface RouteDefinition extends RouteSchema {
     store?:        { get(k: string): Promise<{ count: number; reset: number } | null>; set(k: string, v: { count: number; reset: number }): Promise<void> }
     keyGenerator?: (req: import('express').Request) => string
   }
-  cache?:     { maxAge: number; private?: boolean; noStore?: boolean }
+  cache?:     { noStore: true; maxAge?: number; private?: boolean } | { maxAge: number; private?: boolean; noStore?: boolean; sMaxAge?: number; staleWhileRevalidate?: number }
 }
 
 export function defineRoute(input: DefineRouteInput): RouteDefinition {

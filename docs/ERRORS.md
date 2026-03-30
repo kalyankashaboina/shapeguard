@@ -417,6 +417,31 @@ Stable string codes — safe to match in frontend code.
 | `INVALID_CONTENT_TYPE` | 415 | pre-parse | POST/PUT/PATCH without Content-Type |
 | `PARAM_POLLUTION` | 400 | pre-parse | query param sent as array (?x=a&x=b) |
 | `PROTO_POLLUTION` | 400 | pre-parse | `__proto__` in body |
+| `RATE_LIMIT_EXCEEDED` | 429 | validate() | per-route rate limit hit |
+| `WEBHOOK_SIGNATURE_MISSING` | 400 | verifyWebhook() | signature header absent |
+| `WEBHOOK_SIGNATURE_INVALID` | 401 | verifyWebhook() | HMAC mismatch |
+| `WEBHOOK_TIMESTAMP_MISSING` | 400 | verifyWebhook() | timestamp field absent (Stripe/Svix) |
+| `WEBHOOK_TIMESTAMP_EXPIRED` | 400 | verifyWebhook() | timestamp outside tolerance window |
+
+### `AppError.define()` — typed error factory
+
+Create reusable, TypeScript-typed error constructors once. No more `Record<string, unknown>`.
+
+```ts
+// Define once — fully typed details payload
+const PaymentError = AppError.define<{ amount: number; currency: string }>(
+  'PAYMENT_FAILED', 402, 'Payment failed'
+)
+
+// Throw anywhere — TypeScript checks the shape
+throw PaymentError({ amount: 9.99, currency: 'USD' })
+
+// Override the message per-throw
+throw PaymentError({ amount: 0, currency: 'USD' }, 'Card declined — insufficient funds')
+
+// Clients receive:
+// { success: false, error: { code: 'PAYMENT_FAILED', message: '...', details: { amount: 9.99, currency: 'USD' } } }
+```
 
 ---
 

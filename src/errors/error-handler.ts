@@ -27,7 +27,14 @@ export function errorHandler(opts: ErrorHandlerOptions = {}): ErrorRequestHandle
     const appErr = isAppError(err) ? (err as AppError) : AppError.fromUnknown(err)
     const isProd = !debug
 
-    if (logger) {
+    // BUG #5 FIX: auto-discover shapeguard's logger from app.locals when no
+    // explicit logger was passed. shapeguard() stores its logger instance on
+    // req.app.locals['__sg_logger__'] so errorHandler() picks it up automatically.
+    // Explicit logger option still takes precedence — zero breaking changes.
+    // Guard req.app existence for standalone / test usage where app is not attached.
+    const activeLogger = logger ?? (req.app?.locals as Record<string, unknown> | undefined)?.['__sg_logger__'] as typeof logger | undefined
+
+    if (activeLogger) {
       const payload: Record<string, unknown> = {
         requestId: req.id, code: appErr.code,
         method: req.method, endpoint: req.route?.path ?? req.path, status: appErr.statusCode,
@@ -35,9 +42,9 @@ export function errorHandler(opts: ErrorHandlerOptions = {}): ErrorRequestHandle
       if (!appErr.isOperational || appErr.statusCode >= 500) {
         payload['stack']   = appErr.stack
         payload['message'] = appErr.message
-        logger.error(payload, appErr.message)
+        activeLogger.error(payload, appErr.message)
       } else {
-        logger.warn(payload, appErr.message)
+        activeLogger.warn(payload, appErr.message)
       }
     }
 

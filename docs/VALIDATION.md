@@ -486,11 +486,13 @@ Body is array not object    → 422 — "Expected object, received array"
 Extra unknown fields        → stripped silently, never an error
 __proto__ in body           → stripped at JSON.parse time
 Deeply nested object        → rejected at depth limit before Zod runs
-?role=a&role=b (pollution)  → 422 PARAM_POLLUTION — expected scalar
+?role=a&role=b (pollution)  → 400 PARAM_POLLUTION — repeated query params are rejected before Zod runs
 Query page=abc              → 422 — "Expected number" (use z.coerce.number())
 Missing required param      → Express won't match route — never reaches validate()
 transform throws            → caught, passed to errorHandler as AppError.internal()
 ```
+
+> **PARAM_POLLUTION**: Express parses `?role=admin&role=user` as `role: ['admin','user']` — an array where your schema expects a string. shapeguard detects this before Zod runs and returns `400 PARAM_POLLUTION`. This prevents attackers from injecting unexpected arrays into scalar fields.
 
 ---
 

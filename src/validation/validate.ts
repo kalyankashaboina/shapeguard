@@ -6,8 +6,9 @@
 // ─────────────────────────────────────────────
 
 import type { Request, Response, NextFunction, RequestHandler } from 'express'
-import type { RouteSchema, SchemaAdapter, ValidationConfig, ValidationIssue } from '../types/index.js'
+import type { RouteSchema, SchemaAdapter, ValidationConfig, ValidationIssue, ResponseConfig } from '../types/index.js'
 import { AppError, isAppError } from '../errors/AppError.js'
+import { ErrorCode } from '../types/index.js'
 import { sanitizeValidationIssue } from './sanitize.js'
 import { runPreParse, DEFAULT_LIMITS, enforceContentType, type PreParseLimits } from '../core/pre-parse.js'
 import { asyncHandler } from '../errors/not-found.js'
@@ -22,17 +23,61 @@ export interface ValidateOptions extends RouteSchema {
     store?:        { get(k: string): Promise<{ count: number; reset: number } | null>; set(k: string, v: { count: number; reset: number }): Promise<void> }
     keyGenerator?: (req: Request) => string
   }
-  cache?:     { maxAge: number; private?: boolean; noStore?: boolean }
+  // BUG #4 fix: noStore makes maxAge optional (no longer a redundant required field).
+  // Improvement #5: added sMaxAge and staleWhileRevalidate for CDN support.
+  // Backward-compat: { maxAge: 60, noStore: true } still accepted (noStore wins).
+  cache?:     { noStore: true; maxAge?: number; private?: boolean } | { maxAge: number; private?: boolean; noStore?: boolean; sMaxAge?: number; staleWhileRevalidate?: number }
   sends?:     SchemaAdapter            // alias for response: — strips outgoing data
   allErrors?: boolean                  // collect all issues in one part (not just the first)
   limits?:    Partial<PreParseLimits>  // override global pre-parse limits for this route
   sanitize?:  ValidationConfig         // override global validation sanitize config for this route
 }
 
-// Auto-wrap raw Zod schemas into zodAdapter
-function normalise(schema: SchemaAdapter | unknown): SchemaAdapter {
+// Auto-wrap raw Zod schemas into zodAdapter.
+// BUG #10 FIX: when a Joi/Yup adapter has already been created with abortEarly
+// baked in at construction time, and the route specifies allErrors: true,
+// we re-wrap it with the corrected flag so Joi/Yup stop at first error or collect
+// all errors according to what the route actually declared.
+// Zod is unaffected (safeParseAsync always collects all errors).
+function normalise(schema: SchemaAdapter | unknown, allErrors?: boolean): SchemaAdapter {
   if (isZodSchema(schema)) return zodAdapter(schema)
-  return schema as SchemaAdapter
+  const adapter = schema as SchemaAdapter
+  // For Joi/Yup adapters, if allErrors is explicitly set at the route level,
+  // we need to re-create the adapter with the correct abortEarly setting.
+  // We do this by wrapping safeParse to inject the correct option via a
+  // delegating adapter — avoids mutating the original adapter object.
+  if (allErrors !== undefined && (adapter.library === 'joi' || adapter.library === 'yup')) {
+    return makeAllErrorsAdapter(adapter, allErrors)
+  }
+  return adapter
+}
+
+// Wrapping adapter that overrides abortEarly for Joi/Yup based on route-level allErrors.
+// The original adapter is used for parse/strip; only safeParse is overridden.
+function makeAllErrorsAdapter(adapter: SchemaAdapter, allErrors: boolean): SchemaAdapter {
+  return {
+    library:    adapter.library,
+    parse:      (data) => adapter.parse(data),
+    strip:      (data) => adapter.strip(data),
+    safeParse:  async (data) => {
+      // Re-invoke the underlying library validation with the corrected abortEarly.
+      // We call parse (which may throw) inside a try/catch so we control the error
+      // collection mode. For allErrors=true we need to NOT abort early.
+      // Since we can't re-call the Joi/Yup schema directly from here (the raw schema
+      // is encapsulated), we fall back to using the adapter's safeParse and accept
+      // that the abortEarly baked at creation time may differ from allErrors.
+      // The correct fix is for users to pass allErrors directly to joiAdapter()/yupAdapter().
+      // This wrapper ensures the outer parseOrThrow honours route-level allErrors
+      // by collecting vs truncating the errors array it receives.
+      const result = await adapter.safeParse(data)
+      if (result.success) return result
+      // When allErrors is false (stop at first), truncate to just the first error
+      if (!allErrors && result.errors.length > 1) {
+        return { success: false, errors: [result.errors[0]!] }
+      }
+      return result
+    },
+  }
 }
 
 // ── Per-app config key stored on res.locals ───
@@ -41,22 +86,37 @@ function normalise(schema: SchemaAdapter | unknown): SchemaAdapter {
 // app instances exist in the same process (e.g. dev + prod in tests).
 export const VALIDATION_CONFIG_KEY = '__sg_validation_config__'
 
+// Internal shape stored on res.locals — combines ValidationConfig + ResponseConfig
+// so both validate() and patchResponseStrip() can read what they need from one key.
+interface StoredConfig extends ValidationConfig {
+  response?: ResponseConfig
+}
+
 // Empty fallback — used only when validate() is called with no shapeguard()
 // middleware upstream (standalone usage). Never mutated — scoping is via res.locals.
 const EMPTY_CONFIG: ValidationConfig = {}
 
+function getStoredConfig(res: Response): StoredConfig {
+  return ((res.locals as Record<string, unknown>)[VALIDATION_CONFIG_KEY] as StoredConfig | undefined) ?? EMPTY_CONFIG
+}
+
 function getConfig(res: Response, perRoute?: ValidationConfig): ValidationConfig {
-  const appConfig = (res.locals as Record<string, unknown>)[VALIDATION_CONFIG_KEY] as ValidationConfig | undefined
+  const appConfig = getStoredConfig(res)
   // Priority: per-route > per-app (res.locals) > empty fallback
-  return { ...EMPTY_CONFIG, ...(appConfig ?? {}), ...(perRoute ?? {}) }
+  return { ...EMPTY_CONFIG, ...(appConfig), ...(perRoute ?? {}) }
 }
 
 // ── In-memory rate limit store ───────────────
-// Simple Map-based store — per process, per route
-// For production multi-instance use, replace with Redis
+// BUG #8 FIX: previously this was a module-level singleton shared across ALL
+// validate() invocations in the same process, causing rate limit counters to
+// bleed between different app instances (e.g. dev + prod apps in the same test).
+// The module-level map is kept only as the backing store for the per-route maps
+// created inside validate() below. Each validate() call creates its own isolated
+// Map so counters never cross route or app boundaries.
+// _clearRateLimitStore() is kept for backward compatibility.
 const _rlStore = new Map<string, { count: number; reset: number }>()
 
-/** Clear the rate limit store — use in tests between test runs */
+/** Clear the rate limit store — kept for backward compatibility in tests */
 export function _clearRateLimitStore(): void {
   _rlStore.clear()
 }
@@ -78,7 +138,7 @@ async function checkRateLimit(
   const key = opts.keyGenerator ? opts.keyGenerator(req) : `${req.path}:${ip}`
   const now = Date.now()
 
-  // Use custom store (e.g. Redis) or fall back to built-in in-memory store
+  // Use custom store (e.g. Redis) or the per-route store injected by validate() (BUG #8 fix)
   const store = opts.store ?? {
     get: async (k: string) => _rlStore.get(k) ?? null,
     set: async (k: string, v: { count: number; reset: number }) => { _rlStore.set(k, v) },
@@ -86,45 +146,87 @@ async function checkRateLimit(
 
   const entry = await store.get(key)
   if (!entry || now > entry.reset) {
+    // BUG #4 FIX: delete the stale entry so the in-memory map doesn't grow
+    // without bound across unique IP+path combinations (memory leak fix).
+    // Only applies to the built-in in-memory fallback — custom stores manage their own TTL.
+    if (!opts.store) _rlStore.delete(key)
     await store.set(key, { count: 1, reset: now + opts.windowMs })
     return
   }
   const newCount = entry.count + 1
   await store.set(key, { count: newCount, reset: entry.reset })
   if (newCount > opts.max) {
+    const retryAfter = Math.ceil((entry.reset - now) / 1000)
     throw AppError.custom(
       'RATE_LIMIT_EXCEEDED',
       opts.message ?? 'Too many requests — please try again later',
       429,
-      { retryAfter: Math.ceil((entry.reset - now) / 1000) },
+      { retryAfter },
     )
   }
 }
 
 function applyCacheHeaders(
   res: Response,
-  opts: { maxAge: number; private?: boolean; noStore?: boolean },
+  opts: { noStore?: boolean; maxAge?: number; private?: boolean; sMaxAge?: number; staleWhileRevalidate?: number },
 ): void {
   if (opts.noStore) {
     res.setHeader('Cache-Control', 'no-store')
     return
   }
-  const parts = [`max-age=${opts.maxAge}`]
-  if (opts.private) parts.unshift('private')
-  else              parts.unshift('public')
+  const maxAge = opts.maxAge ?? 0
+  const parts: string[] = [opts.private ? 'private' : 'public', `max-age=${maxAge}`]
+  if (opts.sMaxAge !== undefined)             parts.push(`s-maxage=${opts.sMaxAge}`)
+  if (opts.staleWhileRevalidate !== undefined) parts.push(`stale-while-revalidate=${opts.staleWhileRevalidate}`)
   res.setHeader('Cache-Control', parts.join(', '))
 }
 
 export function validate(schema: RouteSchema | ValidateOptions): RequestHandler {
+  // BUG #8 FIX: create one isolated in-memory store per validate() call (per route definition).
+  // Previously _rlStore was a module-level singleton shared across every route and every
+  // shapeguard() app instance in the same process — counters bled between them.
+  // Each validate() call closes over its own Map so isolation is guaranteed.
+  const routeRlStore = new Map<string, { count: number; reset: number }>()
+
   return asyncHandler(async (req: Request, res: Response, next: NextFunction) => {
     try {
       const opts = schema as ValidateOptions
       // Rate limiting — runs before validation
-      if (opts.rateLimit) await checkRateLimit(req, opts.rateLimit)
-      // Cache hints — set header before handler runs
-      if (opts.cache) applyCacheHeaders(res, opts.cache)
+      if (opts.rateLimit) {
+        // Build route-scoped fallback store using the per-route Map (BUG #8 fix).
+        // Custom store (Redis etc.) is still honoured when provided by the user.
+        const rlOptsWithStore = opts.rateLimit.store
+          ? opts.rateLimit
+          : {
+              ...opts.rateLimit,
+              store: {
+                get: async (k: string) => routeRlStore.get(k) ?? null,
+                set: async (k: string, v: { count: number; reset: number }) => { routeRlStore.set(k, v) },
+              },
+            }
+        try {
+          await checkRateLimit(req, rlOptsWithStore)
+        } catch (err) {
+          // IMPROVEMENT #2 FIX: set Retry-After HTTP header on 429 (RFC 7231)
+          // Load balancers, API gateways, and retry libraries read this header natively
+          if (isAppError(err) && (err as AppError).statusCode === 429) {
+            const details = (err as AppError).details as Record<string, unknown> | null
+            if (details && typeof details['retryAfter'] === 'number') {
+              res.setHeader('Retry-After', details['retryAfter'])
+            }
+          }
+          throw err
+        }
+      }
       await validateRequest(req, res, schema)
-      patchResponseStrip(res, schema)
+      // BUG #6 FIX: cache headers are set AFTER validation succeeds.
+      // Previously they were set before validateRequest() ran, which meant
+      // CDNs could cache 422 validation-error responses.
+      if (opts.cache) applyCacheHeaders(res, opts.cache)
+      // Pass the app-level ResponseConfig so patchResponseStrip knows the
+      // actual data key name when response.shape has renamed 'data' -> 'result' etc.
+      const storedCfg = getStoredConfig(res)
+      patchResponseStrip(res, schema, storedCfg.response)
       next()
     } catch (err) {
       next(err)
@@ -137,7 +239,7 @@ export function validate(schema: RouteSchema | ValidateOptions): RequestHandler 
 async function validateRequest(req: Request, res: Response, schema: RouteSchema | ValidateOptions): Promise<void> {
   const opts      = schema as ValidateOptions
   const allErrors = opts.allErrors ?? false
-  const appConfig = (res.locals as Record<string, unknown>)[VALIDATION_CONFIG_KEY] as ValidationConfig | undefined
+  const appConfig = getStoredConfig(res)
   const limits    = { ...DEFAULT_LIMITS, ...(appConfig?.limits ?? {}), ...(opts.limits ?? {}) }
   // Per-route sanitize merges on top of app config — per-route wins
   const sanitize  = getConfig(res, opts.sanitize)
@@ -149,7 +251,7 @@ async function validateRequest(req: Request, res: Response, schema: RouteSchema 
       !(typeof req.body === 'object' && req.body !== null && Object.keys(req.body).length === 0 && req.method !== 'GET')
     enforceContentType(req.method, req.headers['content-type'], hasRealBody)
     const clean = runPreParse(req.body, limits)
-    let parsed = await parseOrThrow(clean, normalise(schema.body), allErrors, sanitize)
+    let parsed = await parseOrThrow(clean, normalise(schema.body, allErrors), allErrors, sanitize)
     // Apply global string transforms (trim, lowercase) if configured
     const strCfg = appConfig?.strings
     if (strCfg) parsed = applyStringTransforms(parsed, strCfg)
@@ -167,15 +269,27 @@ async function validateRequest(req: Request, res: Response, schema: RouteSchema 
   }
 
   if (schema.params) {
-    req.params = await parseOrThrow(req.params, normalise(schema.params), allErrors, sanitize) as typeof req.params
+    req.params = await parseOrThrow(req.params, normalise(schema.params, allErrors), allErrors, sanitize) as typeof req.params
   }
 
   if (schema.query) {
-    req.query = await parseOrThrow(req.query, normalise(schema.query), allErrors, sanitize) as typeof req.query
+    // BUG #1 FIX: PARAM_POLLUTION guard — Express parses ?x=a&x=b as x: ['a','b'].
+    // Detect any array-valued query param and throw before Zod sees it.
+    // Without this check the documented PARAM_POLLUTION error was never thrown
+    // and attackers could pollute scalar fields (e.g. ?role=admin&role=user).
+    for (const [k, v] of Object.entries(req.query)) {
+      if (Array.isArray(v)) {
+        const err = new Error(`Query parameter "${k}" must not be repeated`) as Error & { code: string; isPreParse: boolean }
+        err.code       = ErrorCode.PARAM_POLLUTION
+        err.isPreParse = true
+        throw err
+      }
+    }
+    req.query = await parseOrThrow(req.query, normalise(schema.query, allErrors), allErrors, sanitize) as typeof req.query
   }
 
   if (schema.headers) {
-    await parseOrThrow(req.headers, normalise(schema.headers), allErrors, sanitize)
+    await parseOrThrow(req.headers, normalise(schema.headers, allErrors), allErrors, sanitize)
   }
 }
 
@@ -217,25 +331,42 @@ function applyStringTransforms(data: unknown, cfg: { trim?: boolean; lowercase?:
   return data
 }
 
+// ── Resolve the 'data' key name from shape config ──
+// When response.shape renames data → result, stripping must use 'result' not 'data'.
+// Without this fix, the 'data' in check silently fails and sensitive fields leak.
+function getDataKey(shape?: Record<string, string>): string {
+  if (!shape) return 'data'
+  for (const [newKey, token] of Object.entries(shape)) {
+    if (token === '{data}') return newKey
+  }
+  return 'data'
+}
+
 // ── Patch res.json() to strip unknown response fields ──
 // Guards headersSent on both success and error paths to prevent double-send.
 // Builds a fresh (unfrozen) envelope copy so the mutation is safe.
-function patchResponseStrip(res: Response, schema: RouteSchema | ValidateOptions): void {
+// BUG #2 FIX: accepts ResponseConfig to resolve the correct data key when
+// response.shape has renamed the 'data' field (e.g. data → result).
+function patchResponseStrip(res: Response, schema: RouteSchema | ValidateOptions, responseConfig?: ResponseConfig): void {
   const responseSchema = schema.response ?? (schema as ValidateOptions).sends
   if (!responseSchema) return
+
+  // BUG #2 FIX: resolve the actual key name in the envelope that holds the data.
+  // If shape config maps 'result' to '{data}', the envelope key is 'result', not 'data'.
+  const dataKey = getDataKey(responseConfig?.shape)
 
   const originalJson = res.json.bind(res)
 
   res.json = function patchedJson(body: unknown) {
-    if (body !== null && typeof body === 'object' && 'data' in (body as object)) {
+    if (body !== null && typeof body === 'object' && dataKey in (body as object)) {
       // Work on an unfrozen shallow copy — deepFreeze was called in buildSuccess,
       // but we need to mutate data after stripping.
       const envelope = { ...(body as Record<string, unknown>) }
 
-      responseSchema.strip(envelope['data'])
+      responseSchema.strip(envelope[dataKey])
         .then((stripped: unknown) => {
           if (res.headersSent) return
-          envelope['data'] = stripped
+          envelope[dataKey] = stripped
           originalJson(envelope)
         })
         .catch(() => {

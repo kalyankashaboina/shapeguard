@@ -15,6 +15,224 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [0.8.0] — 2026-03-28
+
+> **Theme: Enterprise completeness.** Production-grade createDocs(), cursor pagination, webhook verification, and typed error factories. shapeguard now covers every feature gap vs NestJS/tsoa/Hono in the areas it targets.
+> Fully backwards-compatible — no breaking changes.
+
+### Added
+
+#### `createDocs()` — enterprise Swagger UI (major upgrade from v0.7.0)
+
+- **`validatorUrl: 'none'`** — disables external validator.swagger.io calls (all competitor libraries do this; we now do too — eliminates noisy console warnings in browser)
+- **`docExpansion`** — `'none' | 'list' | 'full'` — controls how operations render on load (default: `'list'`)
+- **`defaultModelsExpandDepth`** — controls how deeply schema models expand (default: 1; set -1 to collapse all)
+- **`defaultModelExpandDepth`** — controls individual model expansion depth
+- **`operationsSorter`** — `'alpha' | 'method' | 'none'` — sort operations alphabetically or by HTTP method
+- **`tagsSorter`** — `'alpha' | 'none'` — sort tag groups
+- **`showExtensions`** — show `x-*` vendor extensions in the UI (default: false)
+- **`showCommonExtensions`** — show `x-nullable`, `x-example`, etc.
+- **`displayOperationId`** — show operationId badges on each operation
+- **`maxDisplayedTags`** — limit visible tag groups
+- **`requestInterceptor`** — JavaScript function string injected as Swagger UI's `requestInterceptor`. Use to auto-inject auth headers, request IDs, or log outgoing requests. Example: `"request.headers['X-Trace'] = crypto.randomUUID(); return request;"`
+- **`responseInterceptor`** — JavaScript function string for response inspection/logging
+- **`withCredentials`** — send cookies on Try-It-Out requests
+- **`oauth2RedirectUrl`** — OAuth2 redirect callback URL
+- **`logo`** — `{ url, altText?, backgroundColor? }` — custom logo above the Swagger UI topbar
+- **`headHtml`** — raw HTML injected before `</head>` — use for analytics scripts, custom fonts
+- **`csp`** — Content-Security-Policy header value. Default: auto-generated safe policy covering CDN scripts and styles. Pass `false` to disable. Production APIs should leave this as default.
+- **Security headers** — `X-Content-Type-Options: nosniff` and `X-Frame-Options: DENY` set on every docs response
+
+#### `generateOpenAPI()` — spec generation improvements
+
+- **`deprecated` flag** — set `deprecated: true` on any route definition; renders as a strikethrough in Swagger UI
+- **`description` per route** — separate from `summary`; shown as expanded operation description
+- **`externalDocs` per route** — link to external documentation from any operation
+- **`extensions`** — `Record<string, unknown>` of `x-*` vendor extensions merged onto the operation object
+- **`bodyType`** — `'json' | 'multipart' | 'form'` — controls the `requestBody` content type:
+  - `'multipart'` generates `multipart/form-data` with automatic file field detection (fields named `file`, `image`, `avatar`, `attachment`, etc. get `format: binary`)
+  - `'form'` generates `application/x-www-form-urlencoded`
+  - `'json'` (default) is unchanged
+- **`responseHeaders`** — document response headers in the 200 schema (e.g. `X-Request-Id`, `Retry-After`)
+- **Top-level `tags` array** — define tag objects with descriptions and externalDocs at the spec level
+- **Top-level `externalDocs`** — link to external API documentation at the spec level
+- **`termsOfService`, `contact`, `license`** in spec `info` block
+- **Extended number/integer schemas** — `z.number().min().max()` and `z.number().multipleOf()` now produce `minimum`, `maximum`, `multipleOf` in the schema
+- **`ZodReadonly`** — produces `readOnly: true`
+- **`ZodTuple` with rest element** — variadic tuples map correctly to `prefixItems` + `items`
+- **All-literal union optimization** — `z.union([z.literal('a'), z.literal('b')])` produces `{ enum: ['a', 'b'] }` instead of `{ oneOf: [...] }`
+- **`ZodPipeline`** — maps to the `out` schema (what consumers receive)
+- **`ZodSymbol`**, **`ZodFunction`** — safe fallbacks instead of crashes
+- **String format additions**: `base64` → `byte`, `jwt` (pattern), `nanoid` (pattern), `cidr`, `includes` → pattern
+
+#### `res.cursorPaginated()` — cursor-based pagination
+
+Cursor pagination is the enterprise standard for large datasets and infinite scroll. Offset pagination (`res.paginated()`) breaks when data changes between pages — cursors don't.
+
+```ts
+res.cursorPaginated({
+  data:       users,
+  nextCursor: users.at(-1)?.id ?? null,
+  prevCursor: req.query.cursor ?? null,
+  hasMore:    users.length === limit,
+  total:      1000,            // optional
+})
+// Response:
+// { success: true, data: { items: [...], nextCursor: 'user_abc', prevCursor: null, hasMore: true } }
+```
+
+#### `verifyWebhook()` — HMAC webhook signature middleware
+
+Zero-dependency webhook verification. Uses `crypto.timingSafeEqual()` to prevent timing attacks. Supports replay attack prevention (timestamp tolerance window).
+
+```ts
+import { verifyWebhook } from 'shapeguard'
+
+router.post('/webhooks/stripe',
+  verifyWebhook({ provider: 'stripe', secret: process.env.STRIPE_SECRET! }),
+  handler,
+)
+```
+
+Built-in presets: `stripe` (timestamp + replay protection), `github` (sha256=), `shopify` (base64 HMAC), `twilio` (sha1 base64), `svix` (timestamp + replay protection).
+
+Custom providers:
+```ts
+verifyWebhook({
+  secret:    process.env.MY_SECRET!,
+  algorithm: 'sha256',
+  headerName: 'x-my-signature',
+  prefix:     'sha256=',
+  encoding:   'hex',
+  onFailure: (req, reason) => alerting.notify(reason),
+})
+```
+
+#### `AppError.define()` — typed error factory
+
+Define reusable, TypeScript-safe error constructors once. No more `Record<string, unknown>` guessing.
+
+```ts
+const RateLimitError = AppError.define<{ retryAfter: number; limit: number }>(
+  'RATE_LIMIT_EXCEEDED', 429, 'Too many requests'
+)
+throw RateLimitError({ retryAfter: 30, limit: 100 })
+//                    ^-- TypeScript error if fields wrong or missing
+
+const PaymentError = AppError.define<{ amount: number; currency: string }>(
+  'PAYMENT_FAILED', 402
+)
+throw PaymentError({ amount: 9.99, currency: 'USD' }, 'Payment declined')
+```
+
+### Exported
+
+- `verifyWebhook` and `WebhookConfig` from main `shapeguard` entry
+- `CursorPaginatedData` and `ResCursorPaginatedOpts` types from `shapeguard`
+
+---
+
+## [0.7.0] — 2026-03-28
+
+> **Theme: Swagger docs that actually work.** Two P0 feature gaps closed — security schemes so the padlock button functions, and a built-in `createDocs()` endpoint so zero extra packages are needed. Extended Zod type coverage and automatic 400/401/403/429 responses round out enterprise-grade OpenAPI output.
+> Fully backwards-compatible — no breaking changes.
+
+### Added
+
+- **`security` option in `generateOpenAPI()`** — define named security schemes once (bearer JWT, API key, basic, OAuth2); the Swagger UI padlock button is now fully functional. Previously the padlock rendered but did nothing.
+
+  ```ts
+  generateOpenAPI({
+    security: {
+      bearer: { type: 'http', scheme: 'bearer', bearerFormat: 'JWT' },
+      apiKey:  { type: 'apiKey', in: 'header', name: 'X-API-Key' },
+    },
+    defaultSecurity: ['bearer'],
+    routes: { ... },
+  })
+  ```
+
+- **`defaultSecurity` option** — applies the listed schemes to every operation automatically; override per-route via `route.security: ['otherScheme']` or mark as public with `route.security: []`.
+
+- **Per-route `security` override on inline route definitions** — `security: string[] | null` on any route definition; `[]` generates `security: []` in the spec (explicit public endpoint).
+
+- **`createDocs()` — built-in Swagger UI endpoint** — mounts a fully themed, auth-enabled Swagger UI at any path. No `swagger-ui-express` or other extra package needed. CDN-loaded assets, persistent authorization, dark/light/auto theme.
+
+  ```ts
+  import { createDocs } from 'shapeguard'
+  app.use('/docs', createDocs({ spec, title: 'My API', theme: 'dark' }))
+  // → http://localhost:3000/docs — works immediately
+  ```
+
+- **`DocsConfig`, `SecuritySchemeType`, `InlineRouteDefinition` exported** from both `shapeguard` and `shapeguard/openapi`.
+
+- **Automatic 400 response** on all operations — pre-parse guard errors (repeated query param, body too deep, string too long) now appear in the spec.
+
+- **Automatic 401 + 403 responses** on secured operations — generated whenever `defaultSecurity` or per-route `security` includes at least one scheme.
+
+- **Automatic 429 response** on rate-limited routes — generated whenever the route definition includes a `rateLimit` option; schema includes the `retryAfter` field.
+
+- **Extended Zod type mapping** — `toJsonSchema()` now covers: `ZodInteger`/`ZodInt`, `ZodBigInt` (`int64`), `ZodNull`, `ZodLiteral` (with `const` + `enum`), `ZodUnion`/`ZodDiscriminatedUnion` (`oneOf`), `ZodIntersection` (`allOf`), `ZodTuple` (`prefixItems`), `ZodRecord` (`additionalProperties`), `ZodSet` (`uniqueItems`), `ZodNaN`, `ZodAny`, `ZodUnknown`, `ZodVoid`, `ZodNever` (`not: {}`), `ZodBranded`, `ZodPipeline`, `ZodCatch`, `ZodLazy`. Previously these all fell back to `{ type: 'string' }`.
+
+- **`required` array in object schemas** — properties that are not `ZodOptional` or `ZodDefault` are now listed in the JSON Schema `required` array, making validators and SDK generators behave correctly.
+
+- **Extended string format mapping** — `z.string().date()` → `format: date`, `.time()` → `format: time`, `.ip()` → `format: ipv4`, `.cuid()`, `.cuid2()`, `.ulid()`, `.startsWith()`, `.endsWith()`, `.emoji()` all produce correct schema annotations.
+
+- **`createDocs` exported from `shapeguard/openapi` subpath** — importable from both the main entry and the subpath.
+
+### Changed
+
+- **`with-openapi` example updated** — now uses `createDocs()` and `security` schemes; shows public vs protected route split; demonstrates `rateLimit` producing a 429 entry in the spec.
+
+- **`docs/OPENAPI.md` rewritten** — new sections: Security schemes, createDocs() API reference, per-route security override, supported scheme types, extended response table.
+
+---
+
+## [0.6.1] — 2026-03-28
+
+> **Theme: Security and correctness patch.** All 12 confirmed bugs from the v0.6.0 audit fixed.
+> Zero breaking changes — all existing APIs remain compatible.
+
+### Security
+
+- **[CRITICAL] PARAM_POLLUTION now actually thrown** (`validate.ts`) — the `PARAM_POLLUTION` error code was declared, documented, and mapped to HTTP 400, but never fired. Express parses `?role=admin&role=user` as `role: ['admin','user']` — a scalar field receiving an unexpected array. Shapeguard now walks all `req.query` entries before schema validation and throws `PARAM_POLLUTION` (400) on the first array-valued parameter. Closes the query-pollution attack vector that previously fell through to a generic 422.
+
+- **[CRITICAL] Response stripping no longer silently disabled when shape config renames `data`** (`validate.ts`, `shapeguard.ts`) — when `response.shape` was configured to rename the `data` envelope key (e.g. `result: '{data}'`), `patchResponseStrip` checked for `'data' in body` which always failed on the already-shaped response. Sensitive fields (`passwordHash`, `stripeId`, etc.) leaked to the client with no error or warning. Fixed by threading `ResponseConfig` through to `patchResponseStrip` and resolving the actual data key via a new `getDataKey()` helper.
+
+### Fixed
+
+- **[HIGH] `./openapi` subpath import now resolves** (`package.json`) — `import { generateOpenAPI } from 'shapeguard/openapi'` previously threw `MODULE_NOT_FOUND` at runtime despite the entry point being built by tsup. Added the missing `"./openapi"` export condition pointing to `dist/openapi/index.*`.
+
+- **[HIGH] Rate limit in-memory store no longer leaks memory** (`validate.ts`) — expired entries were never removed from `_rlStore`. On a long-running server with many unique client IPs the Map grew without bound. Stale entries are now deleted before a fresh window entry is written.
+
+- **[HIGH] `errorHandler()` auto-discovers `shapeguard()`'s logger** (`shapeguard.ts`, `error-handler.ts`) — `shapeguard()` now stores its logger on `req.app.locals['__sg_logger__']`. `errorHandler()` reads it as a fallback when no explicit `logger` option is passed, so 5xx errors are logged through the same structured logger without any manual wiring. Existing explicit `logger:` option still takes precedence — zero API change.
+
+- **[MEDIUM] Cache-Control headers no longer set before validation result is known** (`validate.ts`) — `applyCacheHeaders()` was called before `validateRequest()` ran, so CDNs (Cloudflare, Fastly, CloudFront) could cache 422 validation-error responses. Headers are now set only after `validateRequest()` resolves successfully.
+
+- **[MEDIUM] Rate limit store isolated per route** (`validate.ts`) — `_rlStore` was a module-level singleton shared across every `validate()` call in the same process. Two app instances (e.g. dev + prod in integration tests) shared rate limit counters. Each `validate()` call now closes over its own `Map`, fully isolating counters per route and per app instance. `_clearRateLimitStore()` kept for backward compatibility.
+
+- **[MEDIUM] `logResponseBody` captures post-strip body** (`request-log.ts`) — clarified and documented the capture ordering: `captureResponseBody` registers as the inner wrapper; `patchResponseStrip` registers as the outer wrapper. The inner wrapper is called from inside the strip `.then()`, so the captured body is always the already-stripped payload (what the client receives), not the pre-strip data.
+
+- **[LOW] `winston` added to tsup `external` list** (`tsup.config.ts`) — previously absent, which meant downstream bundlers could accidentally inline the entire winston package into their output bundle.
+
+- **[LOW] Route-level `allErrors` now controls Joi/Yup error collection** (`validate.ts`) — `validate({ allErrors: true })` now correctly threads through to Joi/Yup adapter instances via `normalise()`. A new `makeAllErrorsAdapter()` wrapper respects the route-level flag regardless of how the adapter was created.
+
+- **[LOW] `winston` moved from `peerDependencies` to `optionalDependencies`** (`package.json`) — winston was listed as a peer dependency (causing `npm install` warnings for users who don't use it). Moved to `optionalDependencies` alongside joi, yup, pino.
+
+- **[LOW] `withShape()` + `validate()` middleware ordering documented** (`docs/RESPONSE.md`) — the required mount order (`validate()` before `withShape()`) is now documented with working and broken examples. Includes an explanation of why the wrong order silently skips field stripping.
+
+### Improved
+
+- **`Retry-After` HTTP header set on 429 responses** (`validate.ts`) — the retry window was previously only in the response body (`details.retryAfter`). RFC 7231 requires the `Retry-After` header on 429 responses. Load balancers, API gateways, and retry libraries (axios-retry, etc.) read this header natively. Both the header and body field are now set.
+
+- **`cache` option: discriminated union — `noStore` no longer requires `maxAge`** (`validate.ts`, `define-route.ts`) — `cache: { noStore: true }` is now the complete and correct way to disable caching. Previously TypeScript required `maxAge` even though it was ignored when `noStore` was set.
+
+- **`cache` option: CDN directives `sMaxAge` and `staleWhileRevalidate` supported** (`validate.ts`, `define-route.ts`) — teams using CDN-fronted APIs can now set separate browser and CDN TTLs: `cache: { maxAge: 60, sMaxAge: 300, staleWhileRevalidate: 60 }` produces `Cache-Control: public, max-age=60, s-maxage=300, stale-while-revalidate=60`.
+
+- **Testing: async strip behaviour documented** (`docs/TESTING.md`) — added a dedicated section explaining why unit tests asserting on stripped response bodies must `await Promise.resolve()` after calling the handler, with correct and incorrect examples, and a note that supertest integration tests are unaffected.
+
+---
+
 ## [0.6.0] — 2026-03-17
 
 > **Theme: Logger control.** Four new options giving teams precise control over what appears in terminal and log files. Every option is independent — use one, some, or all. Zero config change needed for existing apps.

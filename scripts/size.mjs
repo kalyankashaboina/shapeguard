@@ -1,8 +1,11 @@
-// scripts/size.mjs — cross-platform replacement for du -sh dist/* | sort -h
-// Works on Windows, Mac, Linux — no shell tools needed.
+// scripts/size.mjs — bundle size report
+// Cross-platform: works on Windows, Mac, Linux — no shell tools needed.
+// Used by: npm run size, CI bundle size check, benchmark workflow.
 
 import { readdirSync, statSync } from 'fs'
 import { join } from 'path'
+
+const BUDGET_KB = 50   // main ESM bundle must stay under this
 
 function getFiles(dir, base = dir) {
   const entries = readdirSync(dir, { withFileTypes: true })
@@ -29,3 +32,15 @@ for (const { path, size } of files) {
 
 console.log('')
 console.log(`${fmt(total)}  TOTAL (${files.length} files)`)
+
+// Budget check
+const mainEsm = files.find(f => f.path === 'dist/index.mjs')
+if (mainEsm) {
+  const kb = mainEsm.size / 1024
+  const status = kb < BUDGET_KB ? '✅' : '❌'
+  console.log(`\n${status} Main bundle: ${kb.toFixed(2)} KB / ${BUDGET_KB} KB budget`)
+  if (kb >= BUDGET_KB) {
+    console.error(`Bundle size regression! ${kb.toFixed(2)} KB exceeds ${BUDGET_KB} KB limit.`)
+    process.exit(1)
+  }
+}
