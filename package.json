@@ -102,7 +102,7 @@
     "pino-pretty": "^11.0.0",
     "supertest": "^7.0.0",
     "tsup": "^8.0.2",
-    "typescript": "^5.4.0",
+    "typescript": "^6.0.2",
     "vitest": "^1.4.0",
     "zod": "^3.22.4",
     "@vitest/coverage-v8": "^1.4.0"
