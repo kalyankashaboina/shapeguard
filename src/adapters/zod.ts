@@ -16,6 +16,9 @@ type ZodIssue = {
 export function zodAdapter<TOutput = unknown>(schema: ZodLike<TOutput>): SchemaAdapter<TOutput> {
   return {
     library: 'zod',
+    // Expose raw schema for openapi introspection (generateOpenAPI/createDocs)
+    // without creating a runtime dependency on zod types
+    schema,
 
     async parse(data: unknown): Promise<TOutput> {
       return schema.parseAsync(data)

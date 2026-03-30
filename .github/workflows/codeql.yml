@@ -1,39 +1,61 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# codeql.yml — GitHub CodeQL Security Analysis
+#
+# Scans TypeScript source for security vulnerabilities and code quality issues.
+# Results appear in Security → Code scanning tab.
+# ─────────────────────────────────────────────────────────────────────────────
+
 name: CodeQL Security Scan
 
 on:
   push:
-    branches:
-      - main
+    branches: [main]
   pull_request:
-    branches:
-      - main
+    branches: [main]
   schedule:
-    - cron: '0 8 * * 1'   # every Monday 8am — weekly scan
+    - cron: '0 8 * * 1'    # weekly Monday 8am UTC
+
+permissions:
+  actions:         read
+  contents:        read
+  security-events: write
 
 jobs:
   analyze:
-    name: Analyze Code Security
+    name: Analyze (TypeScript)
     runs-on: ubuntu-latest
-
-    permissions:
-      actions: read
-      contents: read
-      security-events: write   # needed to upload results
+    timeout-minutes: 20
 
     steps:
-      - name: Checkout code
+      - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20.x
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
 
       - name: Initialize CodeQL
         uses: github/codeql-action/init@v3
         with:
           languages: typescript
+          # Both security and quality queries — shapeguard is a security library
           queries: security-and-quality
+          config: |
+            paths-ignore:
+              - examples/**
+              - dist/**
 
-      - name: Autobuild
-        uses: github/codeql-action/autobuild@v3
+      - name: Build for CodeQL
+        run: npm run build
 
       - name: Perform CodeQL Analysis
         uses: github/codeql-action/analyze@v3
         with:
-          category: '/language:typescript'
+          category: /language:typescript
+          output: /tmp/codeql-results
+          upload: always

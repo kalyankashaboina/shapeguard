@@ -1,0 +1,23 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# CODEOWNERS — required reviewers for pull requests
+#
+# These people are automatically requested for review when their area changes.
+# PRs cannot be merged without approval from at least one code owner.
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Default owner for everything
+*                           @kalyankashaboina
+
+# Security-sensitive code — always requires explicit review
+src/core/pre-parse.ts       @kalyankashaboina
+src/security/               @kalyankashaboina
+src/errors/                 @kalyankashaboina
+
+# Public API — any change to the type surface needs careful review
+src/types/                  @kalyankashaboina
+src/index.ts                @kalyankashaboina
+
+# Release and CI configuration
+.github/workflows/          @kalyankashaboina
+package.json                @kalyankashaboina
+tsup.config.ts              @kalyankashaboina

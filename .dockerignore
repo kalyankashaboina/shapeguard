@@ -1,0 +1,53 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# .dockerignore — files excluded from Docker build context
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Dependencies (reinstalled inside container)
+node_modules
+**/node_modules
+
+# Build output (rebuilt inside container)
+dist
+
+# Test files
+src/__tests__
+coverage
+**/*.test.ts
+**/*.spec.ts
+
+# Development files
+*.log
+*.local
+.env
+.env.*
+!.env.example
+
+# Git
+.git
+.gitignore
+
+# Editor
+.vscode
+.idea
+*.swp
+*.swo
+
+# CI/CD
+.github
+
+# Documentation (not needed in runtime image)
+docs
+assets
+*.md
+!README.md
+
+# Scripts
+scripts
+release.ps1
+setup-project.ps1
+
+# Temporary
+.DS_Store
+Thumbs.db
+tmp
+temp

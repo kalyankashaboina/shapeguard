@@ -1,0 +1,67 @@
+name: Feature Request
+description: Suggest a new feature or improvement for shapeguard.
+labels: [enhancement]
+assignees: [kalyankashaboina]
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Before opening a feature request, check [CONTRIBUTING.md](../CONTRIBUTING.md) to make sure it fits
+        shapeguard's scope. shapeguard replaces 8 packages with 1 — we only add features that fit that mission.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem does this solve?
+      description: What are you trying to do that shapeguard doesn't support? Who does this help?
+      placeholder: Every time I receive a Stripe webhook I have to write 20 lines of HMAC verification boilerplate...
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed solution
+      description: How would you like it to work? A code example is ideal.
+      render: typescript
+      value: |
+        // Example of what the API might look like
+        import { verifyWebhook } from 'shapeguard'
+
+        router.post('/webhooks/stripe',
+          verifyWebhook({ provider: 'stripe', secret: process.env.SECRET! }),
+          handler,
+        )
+    validations:
+      required: true
+
+  - type: dropdown
+    id: user-type
+    attributes:
+      label: Which user type does this help most?
+      description: From CONTRIBUTING.md — helps us prioritise correctly.
+      options:
+        - Existing app developer (has a working Express app, wants one feature)
+        - TypeScript developer (wants typed req.body like FastAPI)
+        - Team lead (wants consistent error shapes across a team)
+        - Full adopter (wants everything, starting fresh)
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Any other ways you've thought about solving this?
+
+  - type: dropdown
+    id: contribute
+    attributes:
+      label: Are you willing to contribute a PR?
+      options:
+        - "Yes, I'd like to implement this"
+        - "Maybe, I'd need some guidance"
+        - "No, just suggesting the idea"
+    validations:
+      required: true

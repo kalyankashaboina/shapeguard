@@ -1,0 +1,94 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# docker-compose.yml — shapeguard local development + integration testing
+#
+# Services:
+#   app      — the with-openapi example app (uses shapeguard from source)
+#   redis    — optional Redis store for distributed rate limiting
+#   redis-commander — Redis UI for inspecting rate limit state
+#
+# Usage:
+#   docker compose up              # start everything
+#   docker compose up app          # start example only
+#   docker compose up -d           # start in background
+#   docker compose down            # stop all
+#   docker compose logs -f app     # tail logs
+#
+# Then open:
+#   http://localhost:3000/docs     → Swagger UI (dark theme)
+#   http://localhost:3000/docs/openapi.json → raw OpenAPI spec
+#   http://localhost:8081          → Redis Commander (rate limit inspector)
+# ─────────────────────────────────────────────────────────────────────────────
+
+version: '3.9'
+
+services:
+
+  # ── Example application ─────────────────────────────────────────────────────
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: example
+    container_name: shapeguard-example
+    ports:
+      - '3000:3000'
+    environment:
+      NODE_ENV: development
+      PORT: 3000
+      # Optional: point to Redis service for distributed rate limiting
+      REDIS_URL: redis://redis:6379
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ['CMD', 'wget', '-qO-', 'http://localhost:3000/docs/openapi.json']
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    networks:
+      - shapeguard
+
+  # ── Redis — distributed rate limiting store ──────────────────────────────────
+  # shapeguard's built-in rate limiter works in-memory by default.
+  # For multi-instance deployments, pass a Redis-backed store to defineRoute({ rateLimit: { store } }).
+  redis:
+    image: redis:7-alpine
+    container_name: shapeguard-redis
+    ports:
+      - '6379:6379'
+    command: redis-server --save 60 1 --loglevel warning
+    volumes:
+      - redis-data:/data
+    restart: unless-stopped
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    networks:
+      - shapeguard
+
+  # ── Redis Commander — UI for inspecting Redis state ─────────────────────────
+  redis-commander:
+    image: rediscommander/redis-commander:latest
+    container_name: shapeguard-redis-ui
+    environment:
+      REDIS_HOSTS: redis:redis:6379
+    ports:
+      - '8081:8081'
+    depends_on:
+      - redis
+    profiles:
+      - tools    # only starts with: docker compose --profile tools up
+    networks:
+      - shapeguard
+
+volumes:
+  redis-data:
+    driver: local
+
+networks:
+  shapeguard:
+    driver: bridge

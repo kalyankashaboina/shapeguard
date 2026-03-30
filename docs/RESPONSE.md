@@ -123,60 +123,6 @@ res.paginated({
 // }
 ```
 
-### res.cursorPaginated()
-
-Cursor-based pagination. Enterprise standard for large datasets, real-time feeds, and infinite scroll.
-Unlike offset pagination, cursor pagination remains stable when data is added or removed between pages.
-
-```ts
-res.cursorPaginated({
-  data:        users,                       // array of items
-  nextCursor:  users.at(-1)?.id ?? null,   // cursor pointing to next page
-  prevCursor:  req.query.cursor ?? null,   // cursor pointing to previous page (optional)
-  hasMore:     users.length === limit,      // whether more pages exist
-  total:       1000,                        // optional — omit when count is expensive
-  message:     'Users found',              // optional
-})
-// HTTP 200
-// {
-//   "success": true,
-//   "message": "Users found",
-//   "data": {
-//     "items":      [ ... ],
-//     "nextCursor": "user_abc123",
-//     "prevCursor": null,
-//     "hasMore":    true,
-//     "total":      1000        ← only present when provided
-//   }
-// }
-```
-
-**Consuming cursor pages:**
-```ts
-// GET /users?cursor=user_abc123&limit=20
-const cursor = req.query.cursor as string | undefined
-const users  = await db.users.findMany({
-  take:   limit + 1,                    // fetch one extra to detect hasMore
-  cursor: cursor ? { id: cursor } : undefined,
-  skip:   cursor ? 1 : 0,
-  orderBy: { id: 'asc' },
-})
-const hasMore = users.length > limit
-res.cursorPaginated({
-  data:       users.slice(0, limit),
-  nextCursor: hasMore ? users[limit - 1]!.id : null,
-  hasMore,
-})
-```
-
-**When to use which:**
-
-| Scenario | Use |
-|---|---|
-| Admin tables, report exports | `res.paginated()` — offset, known total |
-| Social feeds, activity streams | `res.cursorPaginated()` — stable under inserts |
-| Infinite scroll, mobile apps | `res.cursorPaginated()` — no page-number concept |
-| Search results | `res.paginated()` — users expect page numbers |
 
 ### res.fail()
 

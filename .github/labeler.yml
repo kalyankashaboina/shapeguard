@@ -1,0 +1,70 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# labeler.yml — File-path → label mappings for auto-labeler
+# ─────────────────────────────────────────────────────────────────────────────
+
+"area: validation":
+  - changed-files:
+    - any-glob-to-any-file:
+      - src/validation/**
+      - src/adapters/**
+
+"area: openapi":
+  - changed-files:
+    - any-glob-to-any-file:
+      - src/openapi/**
+      - docs/OPENAPI.md
+
+"area: errors":
+  - changed-files:
+    - any-glob-to-any-file:
+      - src/errors/**
+      - docs/ERRORS.md
+
+"area: logging":
+  - changed-files:
+    - any-glob-to-any-file:
+      - src/logging/**
+      - docs/LOGGING.md
+
+"area: security":
+  - changed-files:
+    - any-glob-to-any-file:
+      - src/security/**
+      - src/core/pre-parse.ts
+
+"area: testing":
+  - changed-files:
+    - any-glob-to-any-file:
+      - src/testing/**
+      - src/__tests__/**
+      - docs/TESTING.md
+
+"area: docs":
+  - changed-files:
+    - any-glob-to-any-file:
+      - docs/**
+      - README.md
+      - CHANGELOG.md
+      - MIGRATION.md
+      - CONTRIBUTING.md
+
+"area: ci":
+  - changed-files:
+    - any-glob-to-any-file:
+      - .github/**
+      - docker/**
+      - Dockerfile
+      - docker-compose.yml
+
+"area: types":
+  - changed-files:
+    - any-glob-to-any-file:
+      - src/types/**
+
+"dependencies":
+  - changed-files:
+    - any-glob-to-any-file:
+      - package.json
+      - package-lock.json
+      - tsup.config.ts
+      - tsconfig.json

@@ -16,8 +16,9 @@ export { createDTO }            from './validation/create-dto.js'
 export type { DTOResult }       from './validation/create-dto.js'
 
 // ── OpenAPI ───────────────────────────────────
-export { generateOpenAPI }      from './openapi/index.js'
-export type { OpenAPIConfig, OpenAPISpec } from './openapi/index.js'
+export { generateOpenAPI, createDocs }      from './openapi/index.js'
+export type { OpenAPIConfig, OpenAPISpec, DocsConfig, SecuritySchemeType, InlineRouteDefinition } from './openapi/index.js'
+
 
 // ── Zod adapter (first-class) ─────────────────
 export { zodAdapter, isZodSchema } from './adapters/zod.js'
@@ -35,6 +36,7 @@ export { withShape }    from './router/with-shape.js'
 export type {
   // Config
   ShapeguardConfig,
+  RequestIdConfig,
   LoggerConfig,
   ValidationConfig,
   ResponseConfig,
@@ -57,12 +59,14 @@ export type {
   ErrorEnvelope,
   Envelope,
   PaginatedData,
+  CursorPaginatedData,
   ShapeguardResponse,
 
   // Res helper options
   ResOkOpts,
   ResFailOpts,
   ResPaginatedOpts,
+  ResCursorPaginatedOpts,
 
   // Logger
   Logger,

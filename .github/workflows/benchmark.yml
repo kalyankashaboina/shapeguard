@@ -1,0 +1,114 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# benchmark.yml — Bundle size and performance benchmarks
+#
+# Runs on push to main and weekly. Tracks:
+#   - ESM/CJS bundle sizes per entry point
+#   - Test suite duration
+#   - Build duration
+#
+# Results are posted to the job summary and can be tracked over time.
+# ─────────────────────────────────────────────────────────────────────────────
+
+name: Benchmarks
+
+on:
+  push:
+    branches: [main]
+  schedule:
+    - cron: '0 6 * * 1'   # weekly Monday 6am UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  bundle-size:
+    name: Bundle size
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20.x
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Measure bundle sizes
+        run: |
+          echo "## 📦 Bundle sizes" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Entry point | ESM | CJS | DTS |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------------|-----|-----|-----|" >> $GITHUB_STEP_SUMMARY
+
+          entries=(
+            "index|dist/index.mjs|dist/index.cjs|dist/index.d.ts"
+            "openapi|dist/openapi/index.mjs|dist/openapi/index.cjs|dist/openapi/index.d.ts"
+            "testing|dist/testing/index.mjs|dist/testing/index.cjs|dist/testing/index.d.ts"
+            "adapters/joi|dist/adapters/joi.mjs|dist/adapters/joi.cjs|dist/adapters/joi.d.ts"
+            "adapters/yup|dist/adapters/yup.mjs|dist/adapters/yup.cjs|dist/adapters/yup.d.ts"
+            "adapters/winston|dist/adapters/winston.mjs|dist/adapters/winston.cjs|dist/adapters/winston.d.ts"
+          )
+
+          TOTAL=0
+          for entry in "${entries[@]}"; do
+            IFS='|' read -r NAME ESM CJS DTS <<< "$entry"
+            ESM_SIZE=$(wc -c < "$ESM" 2>/dev/null && echo -n || echo 0)
+            CJS_SIZE=$(wc -c < "$CJS" 2>/dev/null && echo -n || echo 0)
+            DTS_SIZE=$(wc -c < "$DTS" 2>/dev/null && echo -n || echo 0)
+            ESM_KB=$(echo "scale=1; $(wc -c < $ESM) / 1024" | bc 2>/dev/null || echo "?")
+            CJS_KB=$(echo "scale=1; $(wc -c < $CJS) / 1024" | bc 2>/dev/null || echo "?")
+            DTS_KB=$(echo "scale=1; $(wc -c < $DTS) / 1024" | bc 2>/dev/null || echo "?")
+            echo "| \`$NAME\` | ${ESM_KB} KB | ${CJS_KB} KB | ${DTS_KB} KB |" >> $GITHUB_STEP_SUMMARY
+          done
+
+          TOTAL_DIST=$(du -sk dist/ | cut -f1)
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Total dist/: ${TOTAL_DIST} KB**" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          # Regression guard
+          MAIN_ESM=$(wc -c < dist/index.mjs)
+          if [ "$MAIN_ESM" -gt 51200 ]; then
+            echo "❌ **REGRESSION**: Main ESM bundle ${MAIN_ESM} bytes exceeds 50KB limit" >> $GITHUB_STEP_SUMMARY
+            exit 1
+          fi
+          echo "✅ Main bundle within 50KB limit (${MAIN_ESM} bytes)" >> $GITHUB_STEP_SUMMARY
+
+  test-timing:
+    name: Test suite timing
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20.x
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Time test suite
+        run: |
+          START=$(date +%s%N)
+          npm test
+          END=$(date +%s%N)
+          ELAPSED=$(( (END - START) / 1000000 ))
+          echo "## ⏱ Test suite: ${ELAPSED}ms" >> $GITHUB_STEP_SUMMARY
+          if [ "$ELAPSED" -gt 30000 ]; then
+            echo "⚠️  Test suite took ${ELAPSED}ms — consider optimising slow tests" >> $GITHUB_STEP_SUMMARY
+          fi

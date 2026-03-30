@@ -1,0 +1,48 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# scorecard.yml — OpenSSF Scorecard
+#
+# Industry-standard supply chain security scoring for open source projects.
+# Results appear at https://securityscorecards.dev and in Security tab.
+# Checks: branch protection, code review, CI, pinned deps, fuzzing, SAST, etc.
+# ─────────────────────────────────────────────────────────────────────────────
+
+name: OpenSSF Scorecard
+
+on:
+  push:
+    branches: [main]
+  schedule:
+    - cron: '0 7 * * 1'   # weekly Monday 7am UTC
+
+permissions: read-all
+
+jobs:
+  analysis:
+    name: Scorecard analysis
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    permissions:
+      security-events: write
+      id-token:        write    # for publishing results
+      contents:        read
+      actions:         read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Run analysis
+        uses: ossf/scorecard-action@v2.4.0
+        with:
+          results_file: results.sarif
+          results_format: sarif
+          publish_results: true
+
+      - name: Upload to code-scanning
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: results.sarif
+          category: scorecard

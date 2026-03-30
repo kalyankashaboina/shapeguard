@@ -1,0 +1,86 @@
+name: Bug Report
+description: Something broken in shapeguard? Report it here.
+labels: [bug]
+assignees: [kalyankashaboina]
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report a bug. Please fill in as much as you can.
+        **Security vulnerabilities** — do not open here. Email kalyankashaboina07@gmail.com instead.
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: A clear description of the bug.
+      placeholder: When I call res.cursorPaginated(), the envelope is missing the 'items' key...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behaviour
+      description: What should have happened instead?
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Minimal reproduction
+      description: Paste the smallest amount of code that shows the bug.
+      render: typescript
+      value: |
+        import { shapeguard } from 'shapeguard'
+        // your code here
+    validations:
+      required: true
+
+  - type: input
+    id: shapeguard-version
+    attributes:
+      label: shapeguard version
+      placeholder: 0.8.0
+    validations:
+      required: true
+
+  - type: input
+    id: node-version
+    attributes:
+      label: Node.js version
+      placeholder: 20.11.0
+    validations:
+      required: true
+
+  - type: input
+    id: express-version
+    attributes:
+      label: Express version
+      placeholder: 4.18.3
+
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      options:
+        - Linux
+        - macOS
+        - Windows
+    validations:
+      required: true
+
+  - type: textarea
+    id: error-output
+    attributes:
+      label: Error output / stack trace
+      render: text
+      placeholder: Paste any error messages or stack traces here
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context
+      description: Anything else that might help? Link to a repo, related issues, etc.
