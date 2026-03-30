@@ -30,7 +30,7 @@ export default defineConfig({
     'winston',       // ← BUG #9 FIX: was missing — downstream bundlers could accidentally inline winston
   ],
 
-  banner: { js: `/* shapeguard v0.7.0 — MIT */` },
+  banner: { js: `/* shapeguard v0.8.0 — MIT */` },
 
   outExtension({ format }) {
     return { js: format === 'esm' ? '.mjs' : '.cjs' }

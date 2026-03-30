@@ -1,10 +1,10 @@
 // ─────────────────────────────────────────────
 // validation/res-helpers.ts — shapeguard
-// Injects res.ok / res.created / res.fail / res.paginated onto every response.
+// Injects res.ok / res.created / res.fail / res.paginated / res.cursorPaginated onto every response.
 // ─────────────────────────────────────────────
 
 import type { Request, Response, NextFunction, RequestHandler } from 'express'
-import type { ResponseConfig, ResOkOpts, ResFailOpts, ResPaginatedOpts, HttpMethod } from '../types/index.js'
+import type { ResponseConfig, ResOkOpts, ResFailOpts, ResPaginatedOpts, ResCursorPaginatedOpts, HttpMethod } from '../types/index.js'
 import { buildSuccess, buildPaginated, buildError } from '../core/response.js'
 
 const DEFAULT_STATUS: Record<HttpMethod, number> = {
@@ -35,6 +35,19 @@ export function injectResHelpers(config: ResponseConfig = {}): RequestHandler {
     res.paginated = function(opts: ResPaginatedOpts): void {
       if (res.headersSent) return
       res.status(200).json(buildPaginated(opts.data, opts.total, opts.page, opts.limit, opts.message ?? '', config))
+    }
+    // Cursor-based pagination — enterprise pattern for large datasets and infinite scroll.
+    // Unlike offset pagination, cursors remain stable when data changes between pages.
+    res.cursorPaginated = function(opts: ResCursorPaginatedOpts): void {
+      if (res.headersSent) return
+      const payload = {
+        items:      opts.data,
+        nextCursor: opts.nextCursor,
+        prevCursor: opts.prevCursor ?? null,
+        hasMore:    opts.hasMore,
+        ...(opts.total !== undefined && { total: opts.total }),
+      }
+      res.status(200).json(buildSuccess(payload, opts.message ?? '', config))
     }
     res.fail = function(opts: ResFailOpts): void {
       if (res.headersSent) return

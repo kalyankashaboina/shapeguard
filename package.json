@@ -1,6 +1,6 @@
 {
   "name": "shapeguard",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "description": "FastAPI-style validation, response shaping, and error handling for Node.js + Express",
   "author": "Kalyan Kashaboina <kalyankashaboina07@gmail.com> (https://github.com/kalyankashaboina)",
   "license": "MIT",

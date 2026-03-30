@@ -23,6 +23,9 @@ export interface SchemaAdapter<TOutput = unknown> {
   safeParse(data: unknown): Promise<SafeParseResult<TOutput>>
   strip(data: unknown):     Promise<TOutput>
   readonly library: 'zod' | 'joi' | 'yup'
+  // Optional: raw schema reference for OpenAPI introspection.
+  // Populated by zodAdapter() so generateOpenAPI() can read Zod _def for type mapping.
+  readonly schema?: unknown
 }
 
 export type SafeParseResult<T> =
@@ -79,14 +82,25 @@ export interface PaginatedData<T> {
   pages: number
 }
 
+// Cursor-based pagination — for large datasets and infinite scroll
+// Offset pagination breaks when data changes between pages; cursors don't.
+export interface CursorPaginatedData<T> {
+  items:      T[]
+  nextCursor: string | null
+  prevCursor: string | null
+  hasMore:    boolean
+  total?:     number   // optional — some datasets don't know the total count efficiently
+}
+
 // ── res helpers ───────────────────────────────
 export interface ShapeguardResponse {
-  ok(opts: ResOkOpts):              void
-  created(opts: ResOkOpts):         void
-  accepted(opts: ResOkOpts):        void
-  noContent():                      void
-  paginated(opts: ResPaginatedOpts): void
-  fail(opts: ResFailOpts):          void
+  ok(opts: ResOkOpts):                    void
+  created(opts: ResOkOpts):               void
+  accepted(opts: ResOkOpts):              void
+  noContent():                            void
+  paginated(opts: ResPaginatedOpts):      void
+  cursorPaginated(opts: ResCursorPaginatedOpts): void
+  fail(opts: ResFailOpts):                void
 }
 
 export interface ResOkOpts {
@@ -101,6 +115,16 @@ export interface ResPaginatedOpts {
   page:     number
   limit:    number
   message?: string
+}
+
+// Cursor pagination options — nextCursor and hasMore are required; everything else optional
+export interface ResCursorPaginatedOpts {
+  data:        unknown[]
+  nextCursor:  string | null
+  prevCursor?: string | null
+  hasMore:     boolean
+  total?:      number
+  message?:    string
 }
 
 export interface ResFailOpts {

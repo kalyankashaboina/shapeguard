@@ -19,6 +19,8 @@ export type { DTOResult }       from './validation/create-dto.js'
 export { generateOpenAPI, createDocs }      from './openapi/index.js'
 export type { OpenAPIConfig, OpenAPISpec, DocsConfig, SecuritySchemeType, InlineRouteDefinition } from './openapi/index.js'
 
+export { verifyWebhook } from './security/webhook.js'
+export type { WebhookConfig } from './security/webhook.js'
 
 // ── Zod adapter (first-class) ─────────────────
 export { zodAdapter, isZodSchema } from './adapters/zod.js'

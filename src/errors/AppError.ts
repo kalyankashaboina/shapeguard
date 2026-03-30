@@ -77,6 +77,26 @@ export class AppError extends Error {
   static fromLegacy(opts: { code: string; message: string; statusCode: number; details?: Record<string, unknown> }): AppError {
     return new AppError(opts.code, opts.message, opts.statusCode, opts.details ?? null)
   }
+
+  // ── Typed error factory ─────────────────────────────────────────────────────
+  // Define a reusable, typed error constructor once. Throw it anywhere with full
+  // TypeScript safety on the details payload — no more Record<string, unknown> guessing.
+  //
+  // Usage:
+  //   const RateLimitError = AppError.define('RATE_LIMIT_EXCEEDED', 429)
+  //   throw RateLimitError({ retryAfter: 30, limit: 100 })
+  //
+  //   const PaymentError = AppError.define<{ amount: number; currency: string }>('PAYMENT_FAILED', 402)
+  //   throw PaymentError({ amount: 9.99, currency: 'USD' })
+  //
+  static define<TDetails extends Record<string, unknown> = Record<string, unknown>>(
+    code:     string,
+    status:   number,
+    message?: string,
+  ): (details?: TDetails, overrideMessage?: string) => AppError {
+    return (details?: TDetails, overrideMessage?: string) =>
+      new AppError(code, overrideMessage ?? message ?? code, status, details ?? null)
+  }
 }
 
 export function isAppError(err: unknown): err is AppError {
