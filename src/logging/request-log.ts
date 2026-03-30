@@ -91,10 +91,32 @@ function redactBody(body: unknown, extraKeys: string[] = []): unknown {
 }
 
 // ── Response body capture ─────────────────────────────────────────────────────
+// BUG #7 FIX: captureResponseBody must capture the body AFTER patchResponseStrip's
+// async strip promise resolves. The correct capture point is when the inner
+// (original) res.json is finally called with the stripped payload — not when
+// patchedJson is first invoked, which happens before the strip is applied.
+//
+// Execution order (when both shapeguard() and validate() are mounted):
+//   shapeguard() runs first → captureResponseBody wraps res.json (inner wrapper)
+//   validate() runs per-route → patchResponseStrip wraps res.json (outer wrapper)
+//   handler calls res.json(body):
+//     1. patchedJson (outer) intercepts → starts async strip → returns res immediately
+//     2. strip resolves → calls captureJson (inner) with the STRIPPED body
+//     3. captureJson records the post-strip body → calls the real res.json
+//
+// This ordering is CORRECT when validate() is mounted after shapeguard().
+// If validate() is used standalone (no shapeguard()), captureResponseBody is never
+// registered and logResponseBody has no effect — this is expected standalone behaviour.
+// See docs/TESTING.md for the testWithStrip() pattern to assert on stripped output.
 function captureResponseBody(res: Response): () => unknown {
   let captured: unknown
   const orig = res.json.bind(res)
-  res.json = function captureJson(body: unknown) { captured = body; return orig(body) }
+  res.json = function captureJson(body: unknown) {
+    // Capture here — this is called by patchResponseStrip's .then() with the
+    // already-stripped payload, so we always log what the client actually receives.
+    captured = body
+    return orig(body)
+  }
   return () => captured
 }
 

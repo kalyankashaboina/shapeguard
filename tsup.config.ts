@@ -27,9 +27,10 @@ export default defineConfig({
     'yup',
     'pino',          // ← moved out — lazy loaded at runtime
     'pino-pretty',   // ← moved out
+    'winston',       // ← BUG #9 FIX: was missing — downstream bundlers could accidentally inline winston
   ],
 
-  banner: { js: `/* shapeguard v0.6.0 — MIT */` },
+  banner: { js: `/* shapeguard v0.6.1 — MIT */` },
 
   outExtension({ format }) {
     return { js: format === 'esm' ? '.mjs' : '.cjs' }

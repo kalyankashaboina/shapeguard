@@ -485,9 +485,10 @@ For high-traffic production multi-instance deployments, provide a Redis store as
 > Available on `defineRoute()`
 
 Sets `Cache-Control` response headers declaratively — no manual `res.setHeader` needed.
+Cache headers are only set on **successful responses** — validation errors (422) are never cached.
 
 ```ts
-// Public cache — CDN and browser can cache for 60 seconds
+// Public cache — CDN and browser cache for 60 seconds
 defineRoute({
   params:   UserParamsSchema,
   response: UserResponseSchema,
@@ -501,17 +502,114 @@ defineRoute({
 })
 // → Cache-Control: private, max-age=300
 
-// No store — sensitive endpoints (auth, payments)
+// CDN-optimised — separate TTL for browser vs CDN
 defineRoute({
-  cache: { maxAge: 0, noStore: true },
+  cache: { maxAge: 60, sMaxAge: 300, staleWhileRevalidate: 30 },
+})
+// → Cache-Control: public, max-age=60, s-maxage=300, stale-while-revalidate=30
+
+// No store — sensitive endpoints (auth, payments)
+// maxAge is not required when noStore is true
+defineRoute({
+  cache: { noStore: true },
 })
 // → Cache-Control: no-store
 ```
 
+### Options
+
+| Option | Type | Description |
+|---|---|---|
+| `maxAge` | `number` | Browser TTL in seconds |
+| `private` | `boolean` | Browser-only — CDN must not cache |
+| `noStore` | `boolean` | Never cache anywhere. When `true`, `maxAge` is optional |
+| `sMaxAge` | `number` | CDN TTL in seconds (overrides `maxAge` for CDNs) |
+| `staleWhileRevalidate` | `number` | Serve stale content for N seconds while revalidating in background |
+
 ### When to use each
 
-| Option | Use case |
+| Pattern | Use case |
 |---|---|
-| `maxAge: N` (default public) | Public data — product listings, blog posts |
-| `maxAge: N, private: true` | User-specific data — profile, settings |
-| `noStore: true` | Sensitive — auth tokens, payment pages |
+| `{ maxAge: 60 }` | Public API data — product listings, blog posts |
+| `{ maxAge: 300, private: true }` | User-specific data — profile, dashboard |
+| `{ maxAge: 60, sMaxAge: 3600 }` | High-traffic public API — short browser TTL, long CDN TTL |
+| `{ maxAge: 60, staleWhileRevalidate: 60 }` | Frequently updated data — serve stale while refreshing |
+| `{ noStore: true }` | Sensitive — auth tokens, payment pages, personal data |
+---
+
+## Webhook signature verification — `verifyWebhook()` <a name="webhook"></a>
+
+> Standalone middleware — works without any other shapeguard feature.
+> See [ERRORS.md](./ERRORS.md) for webhook error codes.
+
+Verify HMAC signatures on incoming webhook payloads. Uses `crypto.timingSafeEqual()` to prevent timing attacks. Zero dependencies — Node.js built-in `crypto` only.
+
+```ts
+import { verifyWebhook } from 'shapeguard'
+
+// Built-in provider presets — algorithm, header, prefix, replay protection all handled
+router.post('/webhooks/stripe',
+  express.raw({ type: 'application/json' }),  // raw body needed for HMAC
+  verifyWebhook({ provider: 'stripe',  secret: process.env.STRIPE_WEBHOOK_SECRET! }),
+  handler,
+)
+
+router.post('/webhooks/github',
+  express.raw({ type: 'application/json' }),
+  verifyWebhook({ provider: 'github',  secret: process.env.GITHUB_WEBHOOK_SECRET! }),
+  handler,
+)
+
+router.post('/webhooks/shopify',
+  express.raw({ type: 'application/json' }),
+  verifyWebhook({ provider: 'shopify', secret: process.env.SHOPIFY_WEBHOOK_SECRET! }),
+  handler,
+)
+
+// Custom provider
+router.post('/webhooks/custom',
+  express.raw({ type: 'application/json' }),
+  verifyWebhook({
+    secret:     process.env.MY_SECRET!,
+    algorithm:  'sha256',
+    headerName: 'x-my-signature',
+    prefix:     'sha256=',
+    encoding:   'hex',
+    onFailure:  (req, reason) => logger.warn({ reason }, 'Webhook verification failed'),
+  }),
+  handler,
+)
+```
+
+### Built-in providers
+
+| Provider | Algorithm | Header | Replay protection |
+|---|---|---|---|
+| `stripe` | SHA-256 | `stripe-signature` | ✅ 5-minute window |
+| `github` | SHA-256 | `x-hub-signature-256` | ❌ |
+| `shopify` | SHA-256 | `x-shopify-hmac-sha256` | ❌ |
+| `twilio` | SHA-1 | `x-twilio-signature` | ❌ |
+| `svix` | SHA-256 | `svix-signature` | ✅ 5-minute window |
+
+### Config options
+
+| Option | Type | Description |
+|---|---|---|
+| `provider` | `'stripe' \| 'github' \| 'shopify' \| 'twilio' \| 'svix'` | Built-in preset |
+| `secret` | `string` | Webhook signing secret from the provider |
+| `algorithm` | `string` | HMAC algorithm (default: `'sha256'`) |
+| `headerName` | `string` | Header containing the signature |
+| `prefix` | `string` | Prefix to strip before comparing (e.g. `'sha256='`) |
+| `encoding` | `'hex' \| 'base64'` | Signature encoding (default: `'hex'`) |
+| `toleranceSecs` | `number` | Replay attack window in seconds (default: `300`) |
+| `onSuccess` | `(req) => void` | Called after successful verification |
+| `onFailure` | `(req, reason) => void` | Called on failure — use for alerting |
+
+### Error codes
+
+| Code | HTTP | When |
+|---|---|---|
+| `WEBHOOK_SIGNATURE_MISSING` | 400 | Signature header not present |
+| `WEBHOOK_SIGNATURE_INVALID` | 401 | HMAC mismatch |
+| `WEBHOOK_TIMESTAMP_MISSING` | 400 | Timestamp field absent (Stripe/Svix only) |
+| `WEBHOOK_TIMESTAMP_EXPIRED` | 400 | Timestamp outside tolerance window — replay attack |

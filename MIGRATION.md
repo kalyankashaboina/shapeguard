@@ -646,3 +646,124 @@ All four can be combined freely. Each defaults to the existing behaviour when no
 | `shortRequestId` | `false` | `true` shows last 8 chars only |
 | `logClientIp` | `false` | `true` adds IP to response lines |
 | `lineColor` | `'method'` | `'level'` colours by status code |
+
+---
+
+## v0.6.0 → v0.6.1
+
+**Patch release — zero breaking changes. No migration needed.**
+
+All changes are bug fixes. Your existing code continues to work identically.
+
+Notable behaviour changes you might observe:
+
+- `?role=admin&role=user` now returns `400 PARAM_POLLUTION` instead of a generic `422` — this is the documented and intended behaviour that was previously broken.
+- Rate-limited routes now return a `Retry-After` HTTP header alongside the body `details.retryAfter` field.
+- `Cache-Control` headers are no longer set on validation-failure responses (422). They were previously set regardless of whether the request validated successfully, which could cause CDNs to cache error responses.
+- `errorHandler()` now auto-discovers `shapeguard()`'s logger from `req.app.locals` — no manual wiring needed. Existing explicit `logger:` option still takes precedence.
+
+---
+
+## v0.6.1 → v0.7.0
+
+**Minor release — zero breaking changes. No migration needed.**
+
+### New: `security` in `generateOpenAPI()`
+
+The Swagger UI padlock now works. Add security schemes and the spec generates `securitySchemes` in `components` automatically:
+
+```ts
+const spec = generateOpenAPI({
+  // ... existing config unchanged ...
+  security: {
+    bearer: { type: 'http', scheme: 'bearer', bearerFormat: 'JWT' },
+  },
+  defaultSecurity: ['bearer'],  // applied to every route
+})
+```
+
+Per-route override: spread `security: []` for public endpoints, `security: ['bearer']` to override.
+
+### New: `createDocs()` — built-in Swagger UI
+
+Replace `swagger-ui-express` with one line:
+
+```ts
+// Before (v0.6.x):
+import swaggerUi from 'swagger-ui-express'
+app.use('/docs', swaggerUi.serve, swaggerUi.setup(spec))
+
+// After (v0.7.0+): no npm install needed
+import { createDocs } from 'shapeguard'
+app.use('/docs', createDocs({ spec, theme: 'dark' }))
+```
+
+`swagger-ui-express` can be uninstalled. `createDocs` is standalone — it works without any other shapeguard feature.
+
+---
+
+## v0.7.0 → v0.8.0
+
+**Minor release — zero breaking changes. No migration needed.**
+
+### New: `res.cursorPaginated()`
+
+```ts
+// Before (offset pagination — may break when data changes between pages):
+res.paginated({ data: users, total: 1000, page: 1, limit: 20 })
+
+// After (cursor pagination — stable, enterprise standard):
+res.cursorPaginated({
+  data:       users,
+  nextCursor: users.at(-1)?.id ?? null,
+  prevCursor: req.query.cursor ?? null,
+  hasMore:    users.length === limit,
+  total:      1000,  // optional
+})
+```
+
+`res.paginated()` is unchanged and still works. `cursorPaginated` is an addition, not a replacement.
+
+### New: `verifyWebhook()`
+
+```ts
+import { verifyWebhook } from 'shapeguard'
+
+// Before (manual HMAC verification in every webhook handler):
+router.post('/webhooks/stripe', express.raw({ type: 'application/json' }), async (req, res) => {
+  const sig  = req.headers['stripe-signature']
+  const body = req.body.toString()
+  // ... 15 lines of HMAC code ...
+})
+
+// After (one middleware, zero boilerplate):
+router.post('/webhooks/stripe',
+  express.raw({ type: 'application/json' }),
+  verifyWebhook({ provider: 'stripe', secret: process.env.STRIPE_SECRET! }),
+  asyncHandler(async (req, res) => {
+    const event = JSON.parse(req.body.toString())
+    res.ok({ data: { received: true } })
+  }),
+)
+```
+
+Built-in presets: `stripe`, `github`, `shopify`, `twilio`, `svix`. Custom providers supported via `algorithm`, `headerName`, `prefix`, `encoding`.
+
+### New: `AppError.define()`
+
+```ts
+// Before (untyped details):
+throw AppError.custom('PAYMENT_FAILED', 'Payment failed', 402, { amount: 9.99 })
+
+// After (typed factory — TypeScript catches wrong shapes at compile time):
+const PaymentError = AppError.define<{ amount: number; currency: string }>('PAYMENT_FAILED', 402)
+throw PaymentError({ amount: 9.99, currency: 'USD' })
+```
+
+### `createDocs()` improvements
+
+`validatorUrl` is now set to `'none'` (eliminates browser console noise from external validator calls), and many new options are available: `logo`, `requestInterceptor`, `docExpansion`, `operationsSorter`, `showExtensions`, `csp`, `headHtml`. All are optional — existing `createDocs()` calls work unchanged.
+
+### `generateOpenAPI()` improvements
+
+New per-route options: `deprecated`, `description`, `externalDocs`, `extensions` (x-* vendor extensions), `bodyType` (`'multipart'` for file uploads, `'form'` for form-urlencoded), `responseHeaders`. Top-level: `tags`, `externalDocs`, `termsOfService`, `contact`, `license`. All are optional — existing `generateOpenAPI()` calls work unchanged.

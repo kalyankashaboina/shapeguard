@@ -1,9 +1,51 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# .npmignore — files excluded from the npm package
+#
+# The "files" field in package.json is the allowlist (dist/, README, CHANGELOG,
+# MIGRATION, LICENSE, docs/). This file is the denylist for anything that
+# slips through — belt-and-suspenders approach.
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Source (users get dist/ not src/)
 src/
 __tests__/
 coverage/
 *.test.ts
+*.spec.ts
+
+# Build config (not needed at runtime)
 tsconfig.json
 tsup.config.ts
 vitest.config.ts
+
+# Docker (not needed by npm users)
+Dockerfile
+docker-compose.yml
+.dockerignore
+docker/
+
+# CI/CD (not needed by npm users)
+.github/
 .gitignore
 .env
+.env.*
+
+# Scripts (build/release tooling — not needed by npm users)
+scripts/
+validate-release.ps1
+
+# Dev docs (CONTRIBUTING, SECURITY are for contributors, not npm users)
+CONTRIBUTING.md
+
+# Editor / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+
+# Temporary
+*.tgz
+*.log
+npm-debug.log*

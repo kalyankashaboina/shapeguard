@@ -6,39 +6,42 @@ Zero config to start. Fully configurable when you need it.
 Strict by default. Lightweight. Production-ready.
 Works in JavaScript and TypeScript. CommonJS and ESM.
 
-[![npm](https://img.shields.io/npm/v/shapeguard)](https://npmjs.com/package/shapeguard)
+[![npm version](https://img.shields.io/npm/v/shapeguard)](https://npmjs.com/package/shapeguard)
+[![npm downloads](https://img.shields.io/npm/dm/shapeguard)](https://npmjs.com/package/shapeguard)
 [![bundle size](https://img.shields.io/bundlephobia/minzip/shapeguard)](https://bundlephobia.com/package/shapeguard)
 [![license](https://img.shields.io/npm/l/shapeguard)](./LICENSE)
 [![node](https://img.shields.io/node/v/shapeguard)](https://npmjs.com/package/shapeguard)
 [![CI](https://github.com/kalyankashaboina/shapeguard/actions/workflows/ci.yml/badge.svg)](https://github.com/kalyankashaboina/shapeguard/actions/workflows/ci.yml)
+[![CodeQL](https://github.com/kalyankashaboina/shapeguard/actions/workflows/codeql.yml/badge.svg)](https://github.com/kalyankashaboina/shapeguard/actions/workflows/codeql.yml)
+[![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/kalyankashaboina/shapeguard/badge)](https://securityscorecards.dev/viewer/?uri=github.com/kalyankashaboina/shapeguard)
+[![codecov](https://codecov.io/gh/kalyankashaboina/shapeguard/branch/main/graph/badge.svg)](https://codecov.io/gh/kalyankashaboina/shapeguard)
 
 ---
 
-## What's new in v0.6.0
+## What's new in v0.8.0
 
-> **Logger control — four independent options for precise terminal and log output**
+> **Enterprise completeness.** Webhook verification, cursor pagination, typed error factories, and a fully-featured Swagger UI — all in one package with zero new dependencies.
 
 ```ts
-app.use(shapeguard({
-  logger: {
-    logIncoming:    false,   // hide >> arrival lines, keep << response lines
-    shortRequestId: true,    // [req_019cfa6f...] → [3a3045a]
-    logClientIp:    true,    // 192.168.1.100 on every response line
-    lineColor:      'level', // 2xx=green, 4xx=yellow, 5xx=red (not method colour)
-  }
-}))
+// Webhook signature verification — Stripe, GitHub, Shopify, Svix, custom
+import { verifyWebhook } from 'shapeguard'
+router.post('/webhooks/stripe',
+  verifyWebhook({ provider: 'stripe', secret: process.env.STRIPE_SECRET! }),
+  handler,
+)
 
-// Before (default, unchanged):
-// 09:44:57  [DEBUG]  >>  POST    /api/v1/users          [req_019cfa6f23691913c86...]
-// 09:44:57  [INFO]   <<  201  POST    /api/v1/users  2ms [req_019cfa6f23691913c86...]
+// Cursor pagination — enterprise standard for large datasets
+res.cursorPaginated({ data: users, nextCursor: users.at(-1)?.id ?? null, hasMore: true })
 
-// After (all four options on):
-// 09:44:57  [INFO]   <<  201  POST    /api/v1/users  2ms [3a3045a]  192.168.1.100
+// Typed error factories — no more Record<string, unknown>
+const PaymentError = AppError.define<{ amount: number }>('PAYMENT_FAILED', 402)
+throw PaymentError({ amount: 9.99 })
+
+// Built-in Swagger UI — zero extra packages, dark theme, CSP headers
+app.use('/docs', createDocs({ spec, theme: 'dark' }))
 ```
 
-All four options are fully independent — use any combination. Zero config change needed for existing apps.
-
-[→ Full v0.6.0 changelog](./CHANGELOG.md) · [→ Migration guide](./MIGRATION.md)
+[→ Full v0.8.0 changelog](./CHANGELOG.md) · [→ Migration guide](./MIGRATION.md)
 
 ---
 
@@ -281,9 +284,8 @@ app.use(errorHandler({
 No `defineRoute()` needed. Describe schemas inline, routes stay untouched.
 
 ```ts
-import { generateOpenAPI } from 'shapeguard'
+import { generateOpenAPI, createDocs } from 'shapeguard'
 import { z } from 'zod'
-import swaggerUi from 'swagger-ui-express'
 
 const spec = generateOpenAPI({
   title:   'My API',
@@ -304,9 +306,9 @@ const spec = generateOpenAPI({
   },
 })
 
-// Serve Swagger UI
-app.use('/docs', swaggerUi.serve, swaggerUi.setup(spec))
-// Serve raw JSON spec (Postman, Insomnia, etc.)
+// Swagger UI — built-in, no extra package, dark/light/auto theme
+app.use('/docs', createDocs({ spec, theme: 'auto' }))
+// Raw JSON spec (Postman, Insomnia, Stoplight, etc.)
 app.get('/docs/openapi.json', (_req, res) => res.json(spec))
 ```
 
@@ -470,21 +472,26 @@ app.use(shapeguard({
 
 ## OpenAPI / Swagger
 
-Auto-generate an OpenAPI 3.1 spec. Zero manual schema duplication.
+Auto-generate an OpenAPI 3.1 spec. Zero manual schema duplication. Built-in Swagger UI — no extra package needed.
 
 ```ts
-import { generateOpenAPI } from 'shapeguard'
-import swaggerUi from 'swagger-ui-express'
+import { generateOpenAPI, createDocs } from 'shapeguard'
 
 const spec = generateOpenAPI({
   title:   'My API',
   version: '1.0.0',
   prefix:  '/api/v1',             // written once, applied to all routes
+
+  // Security — padlock button works out of the box
+  security: { bearer: { type: 'http', scheme: 'bearer', bearerFormat: 'JWT' } },
+  defaultSecurity: ['bearer'],
+
   routes: {
     'POST /users': {
       ...defineRoute({ body: CreateUserDTO, response: UserResponseSchema }),
-      summary: 'Create a new user',
-      tags:    ['Users'],
+      summary:  'Create a new user',
+      tags:     ['Users'],
+      security: [],  // public endpoint — no auth needed
     },
     'GET /users/:id': {
       summary:  'Get user by ID',
@@ -494,11 +501,13 @@ const spec = generateOpenAPI({
   },
 })
 
-app.use('/docs', swaggerUi.serve, swaggerUi.setup(spec))
+// Built-in Swagger UI — dark/light/auto theme, CSP headers, no swagger-ui-express needed
+app.use('/docs', createDocs({ spec, title: 'My API', theme: 'dark' }))
+// Raw JSON spec for Postman, Insomnia, Stoplight, SDK generators
 app.get('/docs/openapi.json', (_req, res) => res.json(spec))
 ```
 
-Each operation gets a stable `operationId` automatically (`POST /users` → `postUsers`). Duplicate paths are warned. Trailing slashes are normalised.
+Each operation gets a stable `operationId` automatically (`POST /users` → `postUsers`). Security schemes, 400/401/403/429 responses, deprecated flags, and multipart/form-data are all supported.
 
 → [Full OpenAPI docs](./docs/OPENAPI.md)
 
@@ -626,8 +635,79 @@ total             ~20kb gzip
 | [LOGGING.md](./docs/LOGGING.md) | pino, requestId, logIncoming, shortRequestId, logClientIp, lineColor, Winston adapter |
 | [RESPONSE.md](./docs/RESPONSE.md) | res.ok, res.created, res.paginated, withShape, full response envelope reference |
 | [CONFIGURATION.md](./docs/CONFIGURATION.md) | every config option with defaults, type signatures, global vs per-route |
-| [MIGRATION.md](./MIGRATION.md) | upgrade guides v0.1.x → v0.2.0 → v0.3.0 → v0.3.1 → v0.4.0 → v0.5.0 → v0.6.0 |
+| [MIGRATION.md](./MIGRATION.md) | upgrade guides v0.1.x → v0.2.0 → v0.3.0 → v0.3.1 → v0.4.0 → v0.5.0 → v0.6.0 → v0.6.1 → v0.7.0 → v0.8.0 |
 | [CHANGELOG.md](./CHANGELOG.md) | full version history |
+| [SECURITY.md](./SECURITY.md) | vulnerability reporting policy |
+
+---
+
+## Docker
+
+Run the example app locally with one command — no Node.js installation required.
+
+```bash
+# Clone the repo
+git clone https://github.com/kalyankashaboina/shapeguard.git
+cd shapeguard
+
+# Start the example app + Redis
+docker compose up
+
+# Open in browser:
+# http://localhost:3000/docs       → Swagger UI (dark theme, padlock works)
+# http://localhost:3000/docs/openapi.json → raw OpenAPI 3.1 spec
+```
+
+### Services
+
+| Service | Port | Description |
+|---------|------|-------------|
+| `app` | 3000 | Example API with Swagger UI |
+| `redis` | 6379 | Distributed rate limit store |
+| `redis-commander` | 8081 | Redis UI (optional — `--profile tools`) |
+
+```bash
+# Start with Redis UI (inspect rate limit state)
+docker compose --profile tools up
+
+# Example app only (no Redis)
+docker compose up app
+
+# Background mode
+docker compose up -d
+
+# Tail logs
+docker compose logs -f app
+
+# Stop everything
+docker compose down
+```
+
+Or use the npm scripts shorthand:
+
+```bash
+npm run docker:up        # docker compose up
+npm run docker:up:bg     # docker compose up -d
+npm run docker:down      # docker compose down
+npm run docker:logs      # docker compose logs -f app
+npm run docker:tools     # docker compose --profile tools up
+npm run docker:build     # docker build -t shapeguard-example .
+```
+
+### Dockerfile
+
+The provided `Dockerfile` uses a multi-stage build:
+
+- **Stage 1 `builder`** — installs all deps, runs `npm run build`, prunes to production deps
+- **Stage 2 `example`** — minimal Alpine image, non-root user, health check
+
+```bash
+# Build and run the example image manually
+docker build -t shapeguard-example .
+docker run -p 3000:3000 shapeguard-example
+```
+
+---
 
 ## Examples
 
@@ -639,8 +719,18 @@ total             ~20kb gzip
 | [handle-and-dto](./examples/handle-and-dto/) | `handle()` + `createDTO()` — less boilerplate per route |
 | [transform-hook](./examples/transform-hook/) | Password hashing, slug generation via `transform` |
 | [global-config](./examples/global-config/) | `validation.strings`, `logger.silent`, custom request ID |
-| [with-openapi](./examples/with-openapi/) | `generateOpenAPI()` + Swagger UI — full working example |
+| [with-openapi](./examples/with-openapi/) | `generateOpenAPI()` + `createDocs()` + security schemes |
 | [with-testing](./examples/with-testing/) | `mockRequest()` / `mockResponse()` controller unit tests |
+
+---
+
+## Security
+
+shapeguard is a security-focused library. Every input validation feature is a security feature.
+
+See [SECURITY.md](./SECURITY.md) for the vulnerability reporting policy.
+
+**Supply chain:** every release is published with npm provenance (`--provenance` flag) and passes [OpenSSF Scorecard](https://securityscorecards.dev/viewer/?uri=github.com/kalyankashaboina/shapeguard) checks. The CI pipeline runs CodeQL static analysis on every push to `main`.
 
 ---
 

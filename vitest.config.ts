@@ -9,14 +9,16 @@ export default defineConfig({
     exclude:     ['examples/**', 'node_modules/**'],
     coverage: {
       provider:   'v8',
-      reporter:   ['text', 'lcov'],
+      reporter:   ['text', 'lcov', 'html'],
       include:    ['src/**/*.ts'],
       exclude:    ['src/**/*.test.ts', 'src/types/**'],
+      // shapeguard is a security library — thresholds are higher than average.
+      // core/, errors/, security/ must be near-perfect. Other modules 85%+.
       thresholds: {
-        lines:      80,
-        functions:  80,
-        branches:   75,
-        statements: 80,
+        lines:      85,
+        functions:  85,
+        branches:   80,
+        statements: 85,
       },
     },
   },

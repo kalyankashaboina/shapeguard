@@ -48,10 +48,21 @@ export function shapeguard(config: ShapeguardConfig = {}): RequestHandler {
       req.id = ''
     }
 
-    // ── Store validation config on res.locals (per-request, per-app-instance) ──
+    // BUG #5 FIX: store logger reference on app.locals so errorHandler() can
+    // auto-discover it without requiring manual wiring by the user.
+    // errorHandler() reads req.app.locals['__sg_logger__'] as a fallback when
+    // no explicit logger option is passed. Explicit wiring still takes precedence.
+    // Guard req.app existence for standalone / test usage where app is not attached.
+    if (req.app?.locals && !(req.app.locals as Record<string, unknown>)['__sg_logger__']) {
+      ;(req.app.locals as Record<string, unknown>)['__sg_logger__'] = logger
+    }
+
+    // ── Store validation + response config on res.locals (per-request, per-app-instance) ──
     // Fixes the module-singleton bug: when dev + prod apps run in the same
     // process (integration tests), each request carries its own app's config.
-    ;(res.locals as Record<string, unknown>)[VALIDATION_CONFIG_KEY] = validationConfig
+    // Both validationConfig and responseConfig are stored so validate()'s
+    // patchResponseStrip can resolve the correct envelope data key (BUG #2 fix).
+    ;(res.locals as Record<string, unknown>)[VALIDATION_CONFIG_KEY] = { ...validationConfig, response: responseConfig }
 
     // ── X-Request-Id response header ────────────────────────────────────
     if (responseConfig.includeRequestId && req.id) {
