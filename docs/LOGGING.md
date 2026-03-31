@@ -193,7 +193,7 @@ app.use(shapeguard({
 
 ## Logger output options <a name="output-options"></a>
 
-Four independent options added in v0.6.0 for precise control over what appears in your terminal and log files. Every option defaults to the existing behaviour — nothing changes until you opt in.
+Four independent options for precise control over what appears in your terminal and log files. Every option defaults to the existing behaviour — nothing changes until you opt in.
 
 ### logIncoming
 

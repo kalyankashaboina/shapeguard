@@ -1,27 +1,41 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// examples/with-openapi — v0.7.0
-// Shows generateOpenAPI() with security schemes + createDocs() Swagger UI.
-// Your defineRoute() definitions become your API spec — zero duplication.
+// examples/with-openapi — shapeguard v0.8.x
 //
-// Run: npx tsx src/index.ts
-// Open: http://localhost:3000/docs          — Swagger UI (dark theme)
-// Open: http://localhost:3000/docs/openapi.json — raw spec JSON
+// Shows the full v0.8.x feature set together:
+//   • generateOpenAPI() + createDocs() — built-in Swagger UI, zero extra packages
+//   • Security schemes — padlock button works in Swagger UI
+//   • verifyWebhook()  — HMAC signature verification (Stripe + GitHub presets)
+//   • res.cursorPaginated() — cursor-based pagination
+//   • AppError.define() — typed error factory
+//
+// Run:  npx tsx src/index.ts
+// Open: http://localhost:3000/docs              — Swagger UI (dark theme)
+//       http://localhost:3000/docs/openapi.json — raw OpenAPI 3.1 JSON
 // ─────────────────────────────────────────────────────────────────────────────
 
 import express from 'express'
 import { z } from 'zod'
 import {
   shapeguard, createDTO, defineRoute, handle,
-  generateOpenAPI, createDocs, AppError, createRouter,
+  generateOpenAPI, createDocs, verifyWebhook,
+  AppError, createRouter,
   notFoundHandler, errorHandler,
 } from 'shapeguard'
+
+// ── Typed error factories (AppError.define) ────────────────────────────────────
+const EmailTakenError = AppError.define<{ email: string }>(
+  'EMAIL_TAKEN', 409, 'Email address already registered'
+)
+const WebhookProcessError = AppError.define<{ eventType: string }>(
+  'WEBHOOK_PROCESS_FAILED', 500, 'Failed to process webhook event'
+)
 
 // ── Schemas ───────────────────────────────────────────────────────────────────
 const CreateUserDTO = createDTO(z.object({
   email:    z.string().email(),
   name:     z.string().min(1).max(100),
   password: z.string().min(8),
-  role:     z.enum(['admin', 'member', 'viewer']),
+  role:     z.enum(['admin', 'member', 'viewer']).default('member'),
 }))
 
 const UserResponseSchema = z.object({
@@ -34,7 +48,7 @@ const UserResponseSchema = z.object({
 
 const UserParamsSchema = z.object({ id: z.string().uuid() })
 const UserQuerySchema  = z.object({
-  page:   z.coerce.number().min(1).default(1),
+  cursor: z.string().optional(),       // cursor-based pagination
   limit:  z.coerce.number().min(1).max(100).default(20),
   search: z.string().optional(),
 })
@@ -48,36 +62,57 @@ const CreateUserRoute = defineRoute({
 
 const GetUserRoute    = defineRoute({ params: UserParamsSchema, response: UserResponseSchema })
 const ListUsersRoute  = defineRoute({ query:  UserQuerySchema })
-const UpdateUserRoute = defineRoute({ params: UserParamsSchema, body: CreateUserDTO, response: UserResponseSchema })
 const DeleteUserRoute = defineRoute({ params: UserParamsSchema })
 
 // ── OpenAPI spec ──────────────────────────────────────────────────────────────
-// Security schemes: the padlock button in Swagger UI is now fully functional.
-// defaultSecurity applies bearer to every route; override per-route via security: []
+// Minimum: generateOpenAPI({ title, version, routes }) — no other options required.
+// Security, tags, descriptions are all optional enhancements.
 const spec = generateOpenAPI({
-  title:       'shapeguard Users API',
+  title:       'shapeguard Example API',
   version:     '1.0.0',
-  description: 'Example API showing auto-generated OpenAPI spec with security schemes',
+  description: 'Full example showing shapeguard v0.8.x features',
   servers:     [{ url: 'http://localhost:3000', description: 'Local development' }],
 
-  security: {
-    bearer: {
-      type:         'http',
-      scheme:       'bearer',
-      bearerFormat: 'JWT',
-    },
-  },
+  security:        { bearer: { type: 'http', scheme: 'bearer', bearerFormat: 'JWT' } },
   defaultSecurity: ['bearer'],
 
   routes: {
-    // Public endpoints — no auth required
-    'POST   /api/users': { ...CreateUserRoute, summary: 'Register',   tags: ['Users'], security: [] },
-    'GET    /api/users': { ...ListUsersRoute,  summary: 'List users', tags: ['Users'], security: [] },
-
-    // Protected endpoints — require bearer JWT
-    'GET    /api/users/:id': { ...GetUserRoute,    summary: 'Get user',    tags: ['Users'] },
-    'PUT    /api/users/:id': { ...UpdateUserRoute, summary: 'Update user', tags: ['Users'] },
-    'DELETE /api/users/:id': { ...DeleteUserRoute, summary: 'Delete user', tags: ['Users'] },
+    // Public
+    'POST   /api/users': {
+      ...CreateUserRoute,
+      summary:  'Register user',
+      tags:     ['Users'],
+      security: [],
+    },
+    'GET    /api/users': {
+      ...ListUsersRoute,
+      summary:     'List users (cursor pagination)',
+      description: 'Returns a page of users with a cursor for the next page.',
+      tags:        ['Users'],
+      security:    [],
+    },
+    // Protected
+    'GET    /api/users/:id': {
+      ...GetUserRoute,
+      summary: 'Get user',
+      tags:    ['Users'],
+    },
+    'DELETE /api/users/:id': {
+      ...DeleteUserRoute,
+      summary: 'Delete user',
+      tags:    ['Users'],
+    },
+    // Webhooks — no auth (signature-verified instead)
+    'POST   /webhooks/stripe': {
+      summary:  'Stripe webhook',
+      tags:     ['Webhooks'],
+      security: [],
+    },
+    'POST   /webhooks/github': {
+      summary:  'GitHub webhook',
+      tags:     ['Webhooks'],
+      security: [],
+    },
   },
 })
 
@@ -87,15 +122,39 @@ const users = new Map<string, User>()
 
 // ── Controllers ───────────────────────────────────────────────────────────────
 const createUser = handle(CreateUserRoute, async (req, res) => {
-  if ([...users.values()].find(u => u.email === req.body.email)) throw AppError.conflict('Email')
-  const user: User = { id: crypto.randomUUID(), ...req.body, createdAt: new Date().toISOString() }
+  // Use typed error factory — TypeScript checks { email } shape at compile time
+  if ([...users.values()].find(u => u.email === req.body.email)) {
+    throw EmailTakenError({ email: req.body.email })
+  }
+  const user: User = {
+    id:        crypto.randomUUID(),
+    email:     req.body.email,
+    name:      req.body.name,
+    role:      req.body.role,
+    password:  req.body.password,
+    createdAt: new Date().toISOString(),
+  }
   users.set(user.id, user)
   res.created({ data: user, message: 'User created' })
 })
 
+// Cursor pagination — stable under inserts/deletes (unlike offset pagination)
 const listUsers = handle(ListUsersRoute, async (req, res) => {
-  const all = [...users.values()]
-  res.paginated({ data: all, total: all.length, page: req.query.page, limit: req.query.limit })
+  const { cursor, limit, search } = req.query
+  let all = [...users.values()]
+  if (search) all = all.filter(u => u.name.includes(search) || u.email.includes(search))
+
+  const startIdx  = cursor ? all.findIndex(u => u.id === cursor) + 1 : 0
+  const page      = all.slice(startIdx, startIdx + limit)
+  const nextCursor = page.length === limit ? page[page.length - 1]!.id : null
+
+  res.cursorPaginated({
+    data:       page,
+    nextCursor,
+    prevCursor: cursor ?? null,
+    hasMore:    nextCursor !== null,
+    total:      all.length,
+  })
 })
 
 const getUser = handle(GetUserRoute, async (req, res) => {
@@ -123,19 +182,77 @@ app.use(express.json())
 app.use(shapeguard())
 app.use('/api/users', router)
 
-// Raw spec JSON — import into Postman, Insomnia, Stoplight, etc.
-app.get('/docs/openapi.json', (_req, res) => res.json(spec))
+// ── Webhook endpoints (signature-verified, not JWT-protected) ─────────────────
+// express.raw() captures the raw body buffer for HMAC verification.
+// Without raw body, HMAC will never match (JSON.stringify reorders fields).
+app.post('/webhooks/stripe',
+  express.raw({ type: 'application/json' }),
+  verifyWebhook({
+    provider: 'stripe',
+    secret:   process.env['STRIPE_WEBHOOK_SECRET'] ?? 'dev_stripe_secret',
+    onSuccess: (req) => {
+      console.log(`✅ Stripe webhook verified: ${req.headers['stripe-signature']?.slice(0,20)}...`)
+    },
+    onFailure: (req, reason) => {
+      console.warn(`❌ Stripe webhook rejected: ${reason}`)
+    },
+  }),
+  (req, res) => {
+    // At this point the signature is verified — safe to process
+    const event = JSON.parse(req.body.toString())
+    console.log(`Stripe event: ${event.type ?? 'unknown'}`)
+    res.json({ received: true })
+  }
+)
 
-// Swagger UI — dark theme, padlock works, no extra npm packages needed
-app.use('/docs', createDocs({ spec, title: 'shapeguard Users API', theme: 'dark' }))
+app.post('/webhooks/github',
+  express.raw({ type: 'application/json' }),
+  verifyWebhook({
+    provider: 'github',
+    secret:   process.env['GITHUB_WEBHOOK_SECRET'] ?? 'dev_github_secret',
+  }),
+  (req, res) => {
+    const payload = JSON.parse(req.body.toString())
+    const event   = req.headers['x-github-event'] as string
+    console.log(`GitHub event: ${event}, action: ${payload.action ?? '-'}`)
+    res.json({ received: true })
+  }
+)
+
+// ── Docs ──────────────────────────────────────────────────────────────────────
+// Minimum createDocs call: createDocs({ spec })
+// Everything else is optional — theme, title, logo, requestInterceptor etc.
+app.get('/docs/openapi.json', (_req, res) => res.json(spec))
+app.use('/docs', createDocs({
+  spec,
+  title:             'shapeguard Example API',
+  theme:             'dark',
+  docExpansion:      'list',
+  persistAuthorization: true,
+  // Inject X-Trace-Id on every Try-It-Out request:
+  requestInterceptor: `
+    request.headers['X-Trace-Id'] = crypto.randomUUID();
+    return request;
+  `,
+}))
 
 app.use(notFoundHandler())
-app.use(errorHandler())
+app.use(errorHandler({ debug: process.env['NODE_ENV'] !== 'production' }))
 
+// ── Start ─────────────────────────────────────────────────────────────────────
 app.listen(3000, () => {
-  console.log('with-openapi example → http://localhost:3000')
-  console.log('Swagger UI → http://localhost:3000/docs')
-  console.log('OpenAPI JSON → http://localhost:3000/docs/openapi.json')
-  console.log()
-  console.log('Click the padlock in Swagger UI and enter a JWT to test protected routes.')
+  console.log('')
+  console.log('shapeguard with-openapi example')
+  console.log('─'.repeat(40))
+  console.log('Swagger UI  → http://localhost:3000/docs')
+  console.log('OpenAPI JSON→ http://localhost:3000/docs/openapi.json')
+  console.log('')
+  console.log('API endpoints:')
+  console.log('  POST   /api/users        (public)')
+  console.log('  GET    /api/users        (cursor pagination)')
+  console.log('  GET    /api/users/:id    (JWT required)')
+  console.log('  DELETE /api/users/:id    (JWT required)')
+  console.log('  POST   /webhooks/stripe  (HMAC verified)')
+  console.log('  POST   /webhooks/github  (HMAC verified)')
+  console.log('')
 })

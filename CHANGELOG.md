@@ -15,6 +15,27 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [0.8.2] — 2026-03-31
+
+> **Patch:** Asset cleanup, example updates, docs hygiene. No code changes.
+
+### Changed
+
+- `examples/with-openapi/`: updated to demonstrate all v0.8.x features — `verifyWebhook()`, `res.cursorPaginated()`, `AppError.define()`. Stale version comment removed.
+- `examples/README.md`: updated table with `with-webhook` example.
+- `README.md`: "What's new" updated to v0.8.1; examples table updated.
+- `docs/LOGGING.md`: removed stale version reference.
+
+### Added
+
+- `examples/with-webhook/`: new example demonstrating `verifyWebhook()` with Stripe, GitHub, Shopify, and custom provider presets. Includes `GET /demo/signature` for generating valid test signatures.
+
+### Removed
+
+- 14 orphaned SVG assets removed from `assets/` — they were not referenced in README or any doc. Active assets: `shapeguard-comparison.svg`, `shapeguard-versions.svg`, `shapeguard-security.svg`.
+
+---
+
 ## [0.8.1] — 2026-03-31
 
 > **Patch:** Docker reorganisation, standalone Swagger docs, test fixes, and enterprise CI.

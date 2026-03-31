@@ -19,7 +19,7 @@ Works in JavaScript and TypeScript. CommonJS and ESM.
 
 ---
 
-## What's new in v0.8.0
+## What's new in v0.8.1
 
 > **Enterprise completeness.** Webhook verification, cursor pagination, typed error factories, and a fully-featured Swagger UI — all in one package with zero new dependencies.
 
@@ -42,7 +42,7 @@ throw PaymentError({ amount: 9.99 })
 app.use('/docs', createDocs({ spec, theme: 'dark' }))
 ```
 
-[→ Full v0.8.0 changelog](./CHANGELOG.md) · [→ Migration guide](./MIGRATION.md)
+[→ Full changelog](./CHANGELOG.md) · [→ Migration guide](./MIGRATION.md)
 
 ---
 
@@ -744,11 +744,12 @@ The `Dockerfile` uses three stages:
 
 | Example | What it shows |
 |---------|---------------|
-| [basic-crud-api](./examples/basic-crud-api/) | Full CRUD app — all features working together end to end |
+| [basic-crud-api](./examples/basic-crud-api/) | Full CRUD API — all features working end to end |
 | [handle-and-dto](./examples/handle-and-dto/) | `handle()` + `createDTO()` — less boilerplate per route |
 | [transform-hook](./examples/transform-hook/) | Password hashing, slug generation via `transform` |
 | [global-config](./examples/global-config/) | `validation.strings`, `logger.silent`, custom request ID |
-| [with-openapi](./examples/with-openapi/) | `generateOpenAPI()` + `createDocs()` + security schemes |
+| [with-openapi](./examples/with-openapi/) | `generateOpenAPI()` + `createDocs()` + `verifyWebhook()` + `cursorPaginated()` |
+| [with-webhook](./examples/with-webhook/) | `verifyWebhook()` — Stripe, GitHub, Shopify, Svix, custom providers |
 | [with-testing](./examples/with-testing/) | `mockRequest()` / `mockResponse()` controller unit tests |
 
 ---
