@@ -19,9 +19,6 @@ tsup.config.ts
 vitest.config.ts
 
 # Docker (not needed by npm users)
-Dockerfile
-docker-compose.yml
-.dockerignore
 docker/
 
 # CI/CD (not needed by npm users)

@@ -152,14 +152,17 @@ npm run build     # build dist/
 
 ### Docker (zero local Node.js setup)
 
+All Docker files live in the `docker/` folder.
+
 ```bash
 # Run the full example app with Swagger UI
-docker compose up
+npm run docker:up
+# or: docker compose -f docker/docker-compose.yml up
 
 # Open http://localhost:3000/docs
 ```
 
-See `docker-compose.yml` for all available services (app, Redis, Redis UI).
+See `docker/docker-compose.yml` for all available services (app, Redis, Redis UI).
 
 ---
 

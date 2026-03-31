@@ -1,12 +1,12 @@
 # ─────────────────────────────────────────────────────────────────────────────
 # ci.yml — shapeguard Continuous Integration
 #
-# Runs on every push to main and every pull request targeting main.
-# Matrix: Node 18 / 20 / 22 (LTS + current) on ubuntu-latest.
+# Runs on every push to main and every PR targeting main.
+# Matrix: Node 18 / 20 / 22 (all supported LTS + current).
 #
 # Jobs:
-#   test     — typecheck → test → coverage → build → bundle size
-#   security — npm audit for vulnerabilities
+#   test     — typecheck → test → coverage → build → bundle size guard
+#   security — npm audit for dependency vulnerabilities
 # ─────────────────────────────────────────────────────────────────────────────
 
 name: CI
@@ -17,7 +17,7 @@ on:
   pull_request:
     branches: [main]
 
-# Cancel in-progress runs on the same branch/PR to save CI minutes.
+# Cancel in-progress runs on the same ref — saves CI minutes
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
@@ -26,14 +26,14 @@ permissions:
   contents: read
 
 jobs:
-  # ── Test matrix ─────────────────────────────────────────────────────────────
+  # ── Test matrix ──────────────────────────────────────────────────────────────
   test:
     name: Test (Node ${{ matrix.node-version }})
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
     strategy:
-      fail-fast: false            # don't cancel other matrix runs on one failure
+      fail-fast: false
       matrix:
         node-version: [18.x, 20.x, 22.x]
 
@@ -56,14 +56,19 @@ jobs:
       - name: Run tests
         run: npm test
 
-      - name: Upload coverage (Node 20 only)
+      # Collect coverage report then upload — must run in this order
+      - name: Collect coverage (Node 20 only)
+        if: matrix.node-version == '20.x'
+        run: npm run test:coverage
+
+      - name: Upload coverage to Codecov (Node 20 only)
         if: matrix.node-version == '20.x'
         uses: codecov/codecov-action@v4
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: ./coverage/lcov.info
           flags: unit
-          fail_ci_if_error: false   # coverage upload failure should not break CI
+          fail_ci_if_error: false
         continue-on-error: true
 
       - name: Build
@@ -73,20 +78,22 @@ jobs:
         if: matrix.node-version == '20.x'
         run: |
           node scripts/size.mjs
-          # Fail if main bundle exceeds 50KB minified (current: ~22KB)
-          MAIN_SIZE=$(wc -c < dist/index.mjs)
-          echo "Main ESM bundle: ${MAIN_SIZE} bytes"
-          if [ "$MAIN_SIZE" -gt 51200 ]; then
-            echo "❌ Bundle size regression: ${MAIN_SIZE} bytes > 50KB limit"
+          MAIN=$(wc -c < dist/index.mjs)
+          echo "Main ESM bundle: ${MAIN} bytes (50 KB limit)"
+          if [ "$MAIN" -gt 51200 ]; then
+            echo "❌ Bundle regression: ${MAIN}b > 51200b"
             exit 1
           fi
-          echo "✅ Bundle size OK: ${MAIN_SIZE} bytes"
+          echo "✅ Bundle size OK"
 
-  # ── Security audit ──────────────────────────────────────────────────────────
+  # ── Security audit ───────────────────────────────────────────────────────────
   security:
-    name: Security audit
+    name: Dependency audit
     runs-on: ubuntu-latest
     timeout-minutes: 5
+
+    permissions:
+      contents: read
 
     steps:
       - name: Checkout
@@ -101,7 +108,6 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Audit dependencies
-        # moderate+ severity fails — low is acceptable in a dev/test dep
+      - name: npm audit
         run: npm audit --audit-level=moderate
-        continue-on-error: true   # audit failures are reported, not blocking
+        continue-on-error: true

@@ -21,6 +21,24 @@
 
 ## Quick start <a name="quick-start"></a>
 
+**Minimum — 3 lines. Works standalone. No `defineRoute()`. No `shapeguard()`. No extra packages.**
+
+```ts
+import { generateOpenAPI, createDocs } from 'shapeguard'
+
+const spec = generateOpenAPI({
+  title:   'My API',
+  version: '1.0.0',
+  routes:  { 'GET /health': { summary: 'Health check' } },
+})
+
+app.use('/docs', createDocs({ spec }))
+```
+
+Open `http://localhost:3000/docs` — Swagger UI loads, no extra npm packages.
+
+**With schemas and auth:**
+
 ```ts
 import { generateOpenAPI, createDocs } from 'shapeguard'
 
@@ -28,6 +46,8 @@ const spec = generateOpenAPI({
   title:   'My API',
   version: '1.0.0',
   prefix:  '/api/v1',
+  security:        { bearer: { type: 'http', scheme: 'bearer', bearerFormat: 'JWT' } },
+  defaultSecurity: ['bearer'],
   routes: {
     'POST   /users': { ...CreateUserRoute, summary: 'Create user', tags: ['Users'] },
     'GET    /users': { ...ListUsersRoute,  summary: 'List users',  tags: ['Users'] },
@@ -37,11 +57,14 @@ const spec = generateOpenAPI({
   },
 })
 
-// Swagger UI — zero extra packages, dark theme, padlock works
+// Dark theme, CSP headers, padlock works — zero extra packages
 app.use('/docs', createDocs({ spec, title: 'My API', theme: 'dark' }))
-// Raw JSON for Postman, Insomnia, SDK generators
+// Raw JSON for Postman, Insomnia, Stoplight, SDK generators
 app.get('/docs/openapi.json', (_req, res) => res.json(spec))
 ```
+
+> **Standalone guarantee:** `generateOpenAPI()` and `createDocs()` work without any other shapeguard feature.
+> You do not need `shapeguard()` middleware, `defineRoute()`, or `validate()` to use them.
 
 ---
 

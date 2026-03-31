@@ -1,0 +1,128 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# docker/docker-compose.yml — shapeguard local development stack
+#
+# Services:
+#   app              — with-openapi example app (Swagger UI on :3000)
+#   redis            — in-memory rate limit store for multi-instance deploys
+#   redis-commander  — Redis web UI for inspecting state (:8081, --profile tools)
+#
+# Usage (run from the repo root — context is always the repo root):
+#
+#   docker compose -f docker/docker-compose.yml up           # start all
+#   docker compose -f docker/docker-compose.yml up app       # app only
+#   docker compose -f docker/docker-compose.yml up -d        # background
+#   docker compose -f docker/docker-compose.yml down         # stop & clean
+#   docker compose -f docker/docker-compose.yml logs -f app  # tail logs
+#
+#   # With Redis UI:
+#   docker compose -f docker/docker-compose.yml --profile tools up
+#
+#   # Or use npm scripts (shorter):
+#   npm run docker:up
+#   npm run docker:tools
+#
+# Open:
+#   http://localhost:3000/docs              → Swagger UI (dark theme)
+#   http://localhost:3000/docs/openapi.json → raw OpenAPI 3.1 spec
+#   http://localhost:8081                   → Redis Commander (--profile tools)
+# ─────────────────────────────────────────────────────────────────────────────
+
+name: shapeguard
+
+services:
+
+  # ── Example application ──────────────────────────────────────────────────────
+  app:
+    build:
+      context: ..                          # repo root — so COPY src/ works
+      dockerfile: docker/Dockerfile        # our Dockerfile inside docker/
+      target: example
+    image: shapeguard-example:local
+    container_name: shapeguard-app
+    ports:
+      - '3000:3000'
+    environment:
+      NODE_ENV: development
+      PORT: '3000'
+      LOG_LEVEL: info
+      # Connect to Redis for distributed rate limiting
+      # shapeguard's in-memory rate limiter works without this —
+      # set only if you're testing multi-instance scenarios
+      REDIS_URL: redis://redis:6379
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ['CMD', 'wget', '-qO-', 'http://localhost:3000/docs/openapi.json']
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    networks:
+      - shapeguard
+    volumes:
+      # Mount source for hot-reload during development
+      # Comment out for production-like testing
+      - type: bind
+        source: ../examples/with-openapi
+        target: /app/example
+        read_only: true
+
+  # ── Redis ─────────────────────────────────────────────────────────────────────
+  # shapeguard's per-route rateLimit works in-memory by default — no Redis needed.
+  # Redis is only required for distributed rate limiting (multiple app instances).
+  redis:
+    image: redis:7-alpine
+    container_name: shapeguard-redis
+    ports:
+      - '6379:6379'
+    command: >
+      redis-server
+        --save 60 1
+        --loglevel warning
+        --maxmemory 128mb
+        --maxmemory-policy allkeys-lru
+    volumes:
+      - redis-data:/data
+    restart: unless-stopped
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+    networks:
+      - shapeguard
+
+  # ── Redis Commander — web UI for Redis ────────────────────────────────────────
+  # Start with: docker compose -f docker/docker-compose.yml --profile tools up
+  redis-commander:
+    image: rediscommander/redis-commander:latest
+    container_name: shapeguard-redis-ui
+    environment:
+      REDIS_HOSTS: local:redis:6379
+      HTTP_USER: admin
+      HTTP_PASSWORD: shapeguard
+    ports:
+      - '8081:8081'
+    depends_on:
+      redis:
+        condition: service_healthy
+    profiles:
+      - tools
+    restart: unless-stopped
+    networks:
+      - shapeguard
+
+volumes:
+  redis-data:
+    driver: local
+    labels:
+      com.shapeguard.description: "Redis persistence for rate limit store"
+
+networks:
+  shapeguard:
+    driver: bridge
+    labels:
+      com.shapeguard.description: "Internal network for shapeguard dev stack"

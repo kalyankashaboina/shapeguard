@@ -1,0 +1,43 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# auto-merge.yml — Automatically merge Dependabot PRs that pass CI
+#
+# Only merges PATCH and MINOR updates (never MAJOR — those need human review).
+# Squash-merges to keep the history clean.
+# Requires: CI passes + PR is from dependabot[bot]
+# ─────────────────────────────────────────────────────────────────────────────
+
+name: Auto-merge Dependabot
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents:      write
+  pull-requests: write
+
+jobs:
+  auto-merge:
+    name: Auto-merge patch/minor Dependabot PRs
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    if: github.actor == 'dependabot[bot]'
+
+    steps:
+      - name: Fetch Dependabot metadata
+        id: meta
+        uses: dependabot/fetch-metadata@v2
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Auto-merge patch and minor updates
+        if: |
+          steps.meta.outputs.update-type == 'version-update:semver-patch' ||
+          steps.meta.outputs.update-type == 'version-update:semver-minor'
+        run: |
+          gh pr merge "${{ github.event.pull_request.number }}" \
+            --squash \
+            --auto \
+            --delete-branch
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

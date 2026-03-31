@@ -1,6 +1,6 @@
 {
   "name": "shapeguard",
-  "version": "0.8.0",
+  "version": "0.8.1",
   "description": "FastAPI-style validation, response shaping, and error handling for Node.js + Express",
   "author": "Kalyan Kashaboina <kalyankashaboina07@gmail.com> (https://github.com/kalyankashaboina)",
   "license": "MIT",
@@ -69,12 +69,13 @@
     "typecheck": "tsc --noEmit",
     "size": "npm run build && node scripts/size.mjs",
     "prepublishOnly": "npm run build && npm test",
-    "docker:build": "docker build -t shapeguard-example .",
-    "docker:up": "docker compose up",
-    "docker:up:bg": "docker compose up -d",
-    "docker:down": "docker compose down",
-    "docker:logs": "docker compose logs -f app",
-    "docker:tools": "docker compose --profile tools up"
+    "docker:build": "docker build -f docker/Dockerfile -t shapeguard-example .",
+    "docker:up": "docker compose -f docker/docker-compose.yml up",
+    "docker:up:bg": "docker compose -f docker/docker-compose.yml up -d",
+    "docker:down": "docker compose -f docker/docker-compose.yml down",
+    "docker:logs": "docker compose -f docker/docker-compose.yml logs -f app",
+    "docker:tools": "docker compose -f docker/docker-compose.yml --profile tools up",
+    "docker:clean": "docker compose -f docker/docker-compose.yml down -v --rmi local"
   },
   "dependencies": {},
   "peerDependencies": {

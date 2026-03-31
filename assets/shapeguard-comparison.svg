@@ -1,87 +1,95 @@
-<svg width="680" height="560" viewBox="0 0 680 560" xmlns="http://www.w3.org/2000/svg" font-family="'Segoe UI', system-ui, -apple-system, sans-serif">
+<svg width="720" height="620" viewBox="0 0 720 620" xmlns="http://www.w3.org/2000/svg" font-family="'Segoe UI', system-ui, -apple-system, sans-serif">
 
   <!-- Title bar -->
-  <rect x="20" y="16" width="640" height="44" rx="10" fill="#E1F5EE" stroke="#0F6E56" stroke-width="0.5"/>
-  <text x="340" y="43" text-anchor="middle" font-size="14" font-weight="600" fill="#085041">shapeguard — what it bundles in one package</text>
+  <rect x="20" y="16" width="680" height="44" rx="10" fill="#E1F5EE" stroke="#0F6E56" stroke-width="0.5"/>
+  <text x="360" y="43" text-anchor="middle" font-size="14" font-weight="600" fill="#085041">shapeguard — replaces 9+ packages with 1, zero runtime deps</text>
 
-  <!-- Feature boxes row 1 - purple -->
-  <rect x="20" y="74" width="200" height="52" rx="8" fill="#EEEDFE" stroke="#534AB7" stroke-width="0.5"/>
-  <text x="120" y="95" text-anchor="middle" font-size="13" font-weight="600" fill="#3C3489">Zod validation</text>
-  <text x="120" y="114" text-anchor="middle" font-size="11" fill="#534AB7">body/params/query typed</text>
+  <!-- Row 1 — purple -->
+  <rect x="20"  y="74" width="210" height="52" rx="8" fill="#EEEDFE" stroke="#534AB7" stroke-width="0.5"/>
+  <text x="125" y="95" text-anchor="middle" font-size="13" font-weight="600" fill="#3C3489">Zod validation</text>
+  <text x="125" y="114" text-anchor="middle" font-size="11" fill="#534AB7">body / params / query typed</text>
 
-  <rect x="240" y="74" width="200" height="52" rx="8" fill="#EEEDFE" stroke="#534AB7" stroke-width="0.5"/>
-  <text x="340" y="95" text-anchor="middle" font-size="13" font-weight="600" fill="#3C3489">Response shaping</text>
-  <text x="340" y="114" text-anchor="middle" font-size="11" fill="#534AB7">strips passwordHash etc.</text>
+  <rect x="250" y="74" width="210" height="52" rx="8" fill="#EEEDFE" stroke="#534AB7" stroke-width="0.5"/>
+  <text x="355" y="95" text-anchor="middle" font-size="13" font-weight="600" fill="#3C3489">Response shaping</text>
+  <text x="355" y="114" text-anchor="middle" font-size="11" fill="#534AB7">strips sensitive fields</text>
 
-  <rect x="460" y="74" width="200" height="52" rx="8" fill="#EEEDFE" stroke="#534AB7" stroke-width="0.5"/>
-  <text x="560" y="95" text-anchor="middle" font-size="13" font-weight="600" fill="#3C3489">AppError</text>
-  <text x="560" y="114" text-anchor="middle" font-size="11" fill="#534AB7">consistent error shapes</text>
+  <rect x="480" y="74" width="220" height="52" rx="8" fill="#EEEDFE" stroke="#534AB7" stroke-width="0.5"/>
+  <text x="590" y="95" text-anchor="middle" font-size="13" font-weight="600" fill="#3C3489">AppError + errorHandler</text>
+  <text x="590" y="114" text-anchor="middle" font-size="11" fill="#534AB7">consistent error shape</text>
 
-  <!-- Feature boxes row 2 - blue -->
-  <rect x="20" y="140" width="200" height="52" rx="8" fill="#E6F1FB" stroke="#185FA5" stroke-width="0.5"/>
-  <text x="120" y="161" text-anchor="middle" font-size="13" font-weight="600" fill="#0C447C">Structured logging</text>
-  <text x="120" y="180" text-anchor="middle" font-size="11" fill="#185FA5">pino, requestId, redaction</text>
+  <!-- Row 2 — blue -->
+  <rect x="20"  y="142" width="210" height="52" rx="8" fill="#E4F0FD" stroke="#1F6FEB" stroke-width="0.5"/>
+  <text x="125" y="163" text-anchor="middle" font-size="13" font-weight="600" fill="#0A3B8C">Structured logging</text>
+  <text x="125" y="182" text-anchor="middle" font-size="11" fill="#1F6FEB">pino · requestId · redaction</text>
 
-  <rect x="240" y="140" width="200" height="52" rx="8" fill="#E6F1FB" stroke="#185FA5" stroke-width="0.5"/>
-  <text x="340" y="161" text-anchor="middle" font-size="13" font-weight="600" fill="#0C447C">asyncHandler</text>
-  <text x="340" y="180" text-anchor="middle" font-size="11" fill="#185FA5">no unhandled rejections</text>
+  <rect x="250" y="142" width="210" height="52" rx="8" fill="#E4F0FD" stroke="#1F6FEB" stroke-width="0.5"/>
+  <text x="355" y="163" text-anchor="middle" font-size="13" font-weight="600" fill="#0A3B8C">asyncHandler</text>
+  <text x="355" y="182" text-anchor="middle" font-size="11" fill="#1F6FEB">no unhandled rejections</text>
 
-  <rect x="460" y="140" width="200" height="52" rx="8" fill="#E6F1FB" stroke="#185FA5" stroke-width="0.5"/>
-  <text x="560" y="161" text-anchor="middle" font-size="13" font-weight="600" fill="#0C447C">Security defaults</text>
-  <text x="560" y="180" text-anchor="middle" font-size="11" fill="#185FA5">proto pollution, DoS guards</text>
+  <rect x="480" y="142" width="220" height="52" rx="8" fill="#E4F0FD" stroke="#1F6FEB" stroke-width="0.5"/>
+  <text x="590" y="163" text-anchor="middle" font-size="13" font-weight="600" fill="#0A3B8C">Security defaults</text>
+  <text x="590" y="182" text-anchor="middle" font-size="11" fill="#1F6FEB">proto · unicode · DoS guards</text>
 
-  <!-- Divider label -->
-  <rect x="20" y="210" width="640" height="40" rx="10" fill="#F1EFE8" stroke="#5F5E5A" stroke-width="0.5"/>
-  <text x="340" y="234" text-anchor="middle" font-size="13" font-weight="600" fill="#2C2C2A">vs doing it manually (what shapeguard replaces)</text>
+  <!-- Row 3 — orange -->
+  <rect x="20"  y="210" width="210" height="52" rx="8" fill="#FEF0E4" stroke="#D4651F" stroke-width="0.5"/>
+  <text x="125" y="231" text-anchor="middle" font-size="13" font-weight="600" fill="#7A3810">Per-route rate limiting</text>
+  <text x="125" y="250" text-anchor="middle" font-size="11" fill="#D4651F">built-in, no extra package</text>
 
-  <!-- Manual column header -->
-  <rect x="20" y="264" width="300" height="34" rx="8" fill="#F5C4B3" stroke="#993C1D" stroke-width="0.5"/>
-  <text x="170" y="285" text-anchor="middle" font-size="13" font-weight="600" fill="#712B13">Without shapeguard</text>
+  <rect x="250" y="210" width="210" height="52" rx="8" fill="#FEF0E4" stroke="#D4651F" stroke-width="0.5"/>
+  <text x="355" y="231" text-anchor="middle" font-size="13" font-weight="600" fill="#7A3810">Cache-Control headers</text>
+  <text x="355" y="250" text-anchor="middle" font-size="11" fill="#D4651F">declarative, per-route</text>
 
-  <!-- Manual rows -->
-  <rect x="20" y="306" width="300" height="28" rx="6" fill="#FAECE7" stroke="#D85A30" stroke-width="0.5"/>
-  <text x="170" y="324" text-anchor="middle" font-size="11" fill="#993C1D">zod + manual parse in every route</text>
+  <rect x="480" y="210" width="220" height="52" rx="8" fill="#FEF0E4" stroke="#D4651F" stroke-width="0.5"/>
+  <text x="590" y="231" text-anchor="middle" font-size="13" font-weight="600" fill="#7A3810">OpenAPI 3.1 + Swagger UI</text>
+  <text x="590" y="250" text-anchor="middle" font-size="11" fill="#D4651F">createDocs() — no swagger-ui-express</text>
 
-  <rect x="20" y="342" width="300" height="28" rx="6" fill="#FAECE7" stroke="#D85A30" stroke-width="0.5"/>
-  <text x="170" y="360" text-anchor="middle" font-size="11" fill="#993C1D">custom error handler per project</text>
+  <!-- Row 4 — green (new v0.8.0) -->
+  <rect x="20"  y="278" width="210" height="52" rx="8" fill="#E1F5EE" stroke="#0F6E56" stroke-width="0.5"/>
+  <text x="125" y="299" text-anchor="middle" font-size="13" font-weight="600" fill="#085041">verifyWebhook()</text>
+  <text x="125" y="318" text-anchor="middle" font-size="11" fill="#0F6E56">HMAC · stripe · github · shopify</text>
 
-  <rect x="20" y="378" width="300" height="28" rx="6" fill="#FAECE7" stroke="#D85A30" stroke-width="0.5"/>
-  <text x="170" y="396" text-anchor="middle" font-size="11" fill="#993C1D">manually strip sensitive fields</text>
+  <rect x="250" y="278" width="210" height="52" rx="8" fill="#E1F5EE" stroke="#0F6E56" stroke-width="0.5"/>
+  <text x="355" y="299" text-anchor="middle" font-size="13" font-weight="600" fill="#085041">Cursor pagination</text>
+  <text x="355" y="318" text-anchor="middle" font-size="11" fill="#0F6E56">res.cursorPaginated()</text>
 
-  <rect x="20" y="414" width="300" height="28" rx="6" fill="#FAECE7" stroke="#D85A30" stroke-width="0.5"/>
-  <text x="170" y="432" text-anchor="middle" font-size="11" fill="#993C1D">try/catch in every async handler</text>
+  <rect x="480" y="278" width="220" height="52" rx="8" fill="#E1F5EE" stroke="#0F6E56" stroke-width="0.5"/>
+  <text x="590" y="299" text-anchor="middle" font-size="13" font-weight="600" fill="#085041">AppError.define()</text>
+  <text x="590" y="318" text-anchor="middle" font-size="11" fill="#0F6E56">typed error factories</text>
 
-  <rect x="20" y="450" width="300" height="28" rx="6" fill="#FAECE7" stroke="#D85A30" stroke-width="0.5"/>
-  <text x="170" y="468" text-anchor="middle" font-size="11" fill="#993C1D">setup pino + requestId yourself</text>
+  <!-- Row 5 — gray — test helpers -->
+  <rect x="20"  y="346" width="210" height="52" rx="8" fill="#F0F0F5" stroke="#888" stroke-width="0.5"/>
+  <text x="125" y="367" text-anchor="middle" font-size="13" font-weight="600" fill="#333">Test helpers</text>
+  <text x="125" y="386" text-anchor="middle" font-size="11" fill="#555">mockRequest · mockResponse</text>
 
-  <!-- shapeguard column header -->
-  <rect x="360" y="264" width="300" height="34" rx="8" fill="#9FE1CB" stroke="#0F6E56" stroke-width="0.5"/>
-  <text x="510" y="285" text-anchor="middle" font-size="13" font-weight="600" fill="#04342C">With shapeguard</text>
+  <rect x="250" y="346" width="210" height="52" rx="8" fill="#F0F0F5" stroke="#888" stroke-width="0.5"/>
+  <text x="355" y="367" text-anchor="middle" font-size="13" font-weight="600" fill="#333">createDTO()</text>
+  <text x="355" y="386" text-anchor="middle" font-size="11" fill="#555">infer + reuse schema types</text>
 
-  <!-- shapeguard rows -->
-  <rect x="360" y="306" width="300" height="28" rx="6" fill="#E1F5EE" stroke="#1D9E75" stroke-width="0.5"/>
-  <text x="510" y="324" text-anchor="middle" font-size="11" fill="#085041">validate() — one line per route</text>
+  <rect x="480" y="346" width="220" height="52" rx="8" fill="#F0F0F5" stroke="#888" stroke-width="0.5"/>
+  <text x="590" y="367" text-anchor="middle" font-size="13" font-weight="600" fill="#333">defineRoute()</text>
+  <text x="590" y="386" text-anchor="middle" font-size="11" fill="#555">single source for route + spec</text>
 
-  <rect x="360" y="342" width="300" height="28" rx="6" fill="#E1F5EE" stroke="#1D9E75" stroke-width="0.5"/>
-  <text x="510" y="360" text-anchor="middle" font-size="11" fill="#085041">errorHandler() — once in app.ts</text>
+  <!-- Divider -->
+  <line x1="20" y1="420" x2="700" y2="420" stroke="#DDD" stroke-width="1"/>
 
-  <rect x="360" y="378" width="300" height="28" rx="6" fill="#E1F5EE" stroke="#1D9E75" stroke-width="0.5"/>
-  <text x="510" y="396" text-anchor="middle" font-size="11" fill="#085041">response schema strips it auto</text>
+  <!-- Without vs With -->
+  <text x="360" y="447" text-anchor="middle" font-size="13" font-weight="600" fill="#555">vs doing it manually — what shapeguard replaces</text>
 
-  <rect x="360" y="414" width="300" height="28" rx="6" fill="#E1F5EE" stroke="#1D9E75" stroke-width="0.5"/>
-  <text x="510" y="432" text-anchor="middle" font-size="11" fill="#085041">asyncHandler() wraps it</text>
+  <rect x="20"  y="460" width="328" height="140" rx="8" fill="#FFF5F5" stroke="#DA3633" stroke-width="0.5"/>
+  <text x="184" y="480" text-anchor="middle" font-size="12" font-weight="600" fill="#B91C1C">Without shapeguard</text>
+  <text x="36"  y="502" font-size="11" fill="#555">zod + manual parse in every route</text>
+  <text x="36"  y="520" font-size="11" fill="#555">custom error handler per project</text>
+  <text x="36"  y="538" font-size="11" fill="#555">manually strip sensitive fields</text>
+  <text x="36"  y="556" font-size="11" fill="#555">try/catch in every async handler</text>
+  <text x="36"  y="574" font-size="11" fill="#555">swagger-ui-express + swagger-jsdoc</text>
+  <text x="36"  y="592" font-size="11" fill="#555">custom HMAC logic per webhook</text>
 
-  <rect x="360" y="450" width="300" height="28" rx="6" fill="#E1F5EE" stroke="#1D9E75" stroke-width="0.5"/>
-  <text x="510" y="468" text-anchor="middle" font-size="11" fill="#085041">shapeguard() mounts it all</text>
-
-  <!-- Bottom badges -->
-  <rect x="20" y="496" width="200" height="36" rx="8" fill="#EAF3DE" stroke="#3B6D11" stroke-width="0.5"/>
-  <text x="120" y="518" text-anchor="middle" font-size="13" font-weight="600" fill="#27500A">~12kb gzip core</text>
-
-  <rect x="240" y="496" width="200" height="36" rx="8" fill="#FAEEDA" stroke="#854F0B" stroke-width="0.5"/>
-  <text x="340" y="518" text-anchor="middle" font-size="13" font-weight="600" fill="#633806">TS + JS support</text>
-
-  <rect x="460" y="496" width="200" height="36" rx="8" fill="#E6F1FB" stroke="#185FA5" stroke-width="0.5"/>
-  <text x="560" y="518" text-anchor="middle" font-size="13" font-weight="600" fill="#0C447C">MIT license</text>
-
+  <rect x="372" y="460" width="328" height="140" rx="8" fill="#F0FFF4" stroke="#0F6E56" stroke-width="0.5"/>
+  <text x="536" y="480" text-anchor="middle" font-size="12" font-weight="600" fill="#085041">With shapeguard</text>
+  <text x="388" y="502" font-size="11" fill="#085041">validate(CreateUserRoute)</text>
+  <text x="388" y="520" font-size="11" fill="#085041">app.use(errorHandler())</text>
+  <text x="388" y="538" font-size="11" fill="#085041">withShape(UserResponseSchema)</text>
+  <text x="388" y="556" font-size="11" fill="#085041">handle(route, controller)</text>
+  <text x="388" y="574" font-size="11" fill="#085041">createDocs({ spec, theme: 'dark' })</text>
+  <text x="388" y="592" font-size="11" fill="#085041">verifyWebhook({ provider: 'stripe' })</text>
 </svg>

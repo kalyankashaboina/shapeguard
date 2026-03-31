@@ -1,0 +1,60 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# docker/.dockerignore — files excluded from Docker build context
+#
+# Context is the repo root (context: ..) so paths are relative to root.
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Dependencies — reinstalled inside the container
+node_modules
+**/node_modules
+
+# Build output — rebuilt inside the container
+dist
+
+# Test files — not needed at runtime
+src/__tests__
+coverage
+**/*.test.ts
+**/*.spec.ts
+
+# Development + environment files
+*.log
+.env
+.env.*
+!.env.example
+
+# Git
+.git
+.gitignore
+
+# Editor
+.vscode
+.idea
+*.swp
+*.swo
+
+# CI/CD — not needed inside container
+.github
+
+# Docker itself (not recursively needed)
+docker/
+
+# Documentation — not needed at runtime
+docs
+assets
+CHANGELOG.md
+MIGRATION.md
+CONTRIBUTING.md
+SECURITY.md
+
+# Build tooling
+scripts
+validate-release.ps1
+tsup.config.ts
+vitest.config.ts
+
+# OS
+.DS_Store
+Thumbs.db
+tmp
+temp

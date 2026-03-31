@@ -15,6 +15,45 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [0.8.1] — 2026-03-31
+
+> **Patch:** Docker reorganisation, standalone Swagger docs, test fixes, and enterprise CI.
+> Fully backwards-compatible — no breaking changes.
+
+### Fixed
+
+- **8 test failures** in v0.8.0-features.test.ts and v0.6.1-bugfixes.test.ts
+  - `zodAdapter()` now exposes `schema` property — `generateOpenAPI()` Zod type mapping now works (ZodLiteral, ZodUnion, ZodNumber checks, ZodString format, `required[]` array)
+  - `makeReq()` test mock now includes `headers: {}` and `socket` — shapeguard() unit tests no longer crash
+  - BUG#5 logger precedence test rewritten to correctly distinguish errorHandler calls from request-logger calls
+
+### Changed
+
+- **Docker files moved to `docker/` folder** — `docker/Dockerfile`, `docker/docker-compose.yml`, `docker/.dockerignore`
+- `docker-compose.yml` now uses 3-stage build (deps/builder/example), named services, Redis auth on Commander
+- All `npm run docker:*` scripts updated to use `-f docker/docker-compose.yml`
+- `docker:clean` script added to remove volumes and local images
+
+### Added
+
+- **`createDocs()` / `generateOpenAPI()` standalone docs** — README and OPENAPI.md now lead with the 3-line minimum case. No `defineRoute()`, no `shapeguard()` middleware required.
+- **Docker badge** in README
+- **`auto-merge.yml`** — auto-merges Dependabot patch/minor PRs after CI passes
+- **`lock.yml`** — locks closed issues/PRs after 30 days inactivity
+- **`greet.yml`** — welcomes first-time contributors with next-steps guidance
+- **`release-drafter.yml`** + `.github/release-drafter.yml` — auto-drafts release notes from merged PR titles
+- **`release.yml` improvements**: pre-release npm tag (`next`), failure notification with recovery instructions, bundle size guard before publish
+- **`ci.yml` fix**: coverage collected (`npm run test:coverage`) before Codecov upload
+- `validate-release.ps1` now referenced in `CONTRIBUTING.md` release process
+- `shapeguard-versions.svg` updated — includes v0.6.1, v0.7.0, v0.8.0
+- `shapeguard-comparison.svg` updated — includes verifyWebhook, cursorPaginated, AppError.define()
+
+### Removed
+
+- `release.ps1` and `setup-project.ps1` — replaced by `validate-release.ps1`
+- Stale images removed from README (`shapeguard-logging.svg`, `shapeguard-response-shapes.svg`)
+
+---
 ## [0.8.0] — 2026-03-28
 
 > **Theme: Enterprise completeness.** Production-grade createDocs(), cursor pagination, webhook verification, and typed error factories. shapeguard now covers every feature gap vs NestJS/tsoa/Hono in the areas it targets.

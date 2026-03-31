@@ -15,6 +15,7 @@ Works in JavaScript and TypeScript. CommonJS and ESM.
 [![CodeQL](https://github.com/kalyankashaboina/shapeguard/actions/workflows/codeql.yml/badge.svg)](https://github.com/kalyankashaboina/shapeguard/actions/workflows/codeql.yml)
 [![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/kalyankashaboina/shapeguard/badge)](https://securityscorecards.dev/viewer/?uri=github.com/kalyankashaboina/shapeguard)
 [![codecov](https://codecov.io/gh/kalyankashaboina/shapeguard/branch/main/graph/badge.svg)](https://codecov.io/gh/kalyankashaboina/shapeguard)
+[![Docker](https://img.shields.io/badge/docker-shapeguard--example-2496ED?logo=docker&logoColor=white)](https://github.com/kalyankashaboina/shapeguard/tree/main/docker)
 
 ---
 
@@ -281,7 +282,25 @@ app.use(errorHandler({
 
 ### Just Swagger — for existing Express apps
 
-No `defineRoute()` needed. Describe schemas inline, routes stay untouched.
+**Minimum: 3 lines. Zero changes to your existing routes. No `defineRoute()` required.**
+
+```ts
+import { generateOpenAPI, createDocs } from 'shapeguard'
+
+// Describe your API — your existing routes are completely untouched
+const spec = generateOpenAPI({
+  title:   'My API',
+  version: '1.0.0',
+  routes: { 'GET /users': { summary: 'List users' } },
+})
+
+// Swagger UI — one line. No swagger-ui-express. No extra packages.
+app.use('/docs', createDocs({ spec }))
+```
+
+That's it. Open `http://localhost:3000/docs`.
+
+**With Zod schemas and security** (still no `defineRoute` needed):
 
 ```ts
 import { generateOpenAPI, createDocs } from 'shapeguard'
@@ -290,29 +309,38 @@ import { z } from 'zod'
 const spec = generateOpenAPI({
   title:   'My API',
   version: '1.0.0',
-  prefix:  '/api/v1',   // prepended to all paths — write once
+  prefix:  '/api/v1',
+
+  // Security — padlock button works immediately
+  security:        { bearer: { type: 'http', scheme: 'bearer', bearerFormat: 'JWT' } },
+  defaultSecurity: ['bearer'],
+
   routes: {
     'POST /users': {
-      summary: 'Create a new user',
-      tags:    ['Users'],
+      summary:  'Create user',
+      tags:     ['Users'],
+      security: [],  // override: public endpoint
       body:     z.object({ email: z.string().email(), name: z.string() }),
       response: z.object({ id: z.string(), email: z.string() }),
     },
     'GET /users/:id': {
-      summary: 'Get user by ID',
-      tags:    ['Users'],
-      response: z.object({ id: z.string(), email: z.string(), name: z.string() }),
+      summary:  'Get user',
+      tags:     ['Users'],
+      response: z.object({ id: z.string(), email: z.string() }),
     },
   },
 })
 
-// Swagger UI — built-in, no extra package, dark/light/auto theme
-app.use('/docs', createDocs({ spec, theme: 'auto' }))
-// Raw JSON spec (Postman, Insomnia, Stoplight, etc.)
+// Dark theme, custom title, CSP headers, no extra packages
+app.use('/docs', createDocs({ spec, title: 'My API', theme: 'dark' }))
+// Raw JSON for Postman, Insomnia, Stoplight, SDK generators
 app.get('/docs/openapi.json', (_req, res) => res.json(spec))
 ```
 
 Your existing routes are untouched. You only describe them for the spec.
+`createDocs` is a standalone Express middleware — no `shapeguard()` setup needed.
+
+→ [Full OpenAPI docs](./docs/OPENAPI.md) · [Security schemes](./docs/OPENAPI.md#security)
 
 ### Just unit testing
 
@@ -385,8 +413,6 @@ errorHandler() mounted
 
 ## Response shapes — always consistent
 
-![Response shapes](./assets/shapeguard-response-shapes.svg)
-
 ```ts
 // SUCCESS — res.ok() / res.created() / res.paginated()
 { "success": true, "message": "User created", "data": { "id": "...", "email": "..." } }
@@ -410,8 +436,6 @@ if (!success) handleError(error.code, error.message)
 ---
 
 ## Logging
-
-![Logging output](./assets/shapeguard-logging.svg)
 
 ```
 # Development — human readable, colour-coded, one line per event
@@ -650,11 +674,11 @@ Run the example app locally with one command — no Node.js installation require
 git clone https://github.com/kalyankashaboina/shapeguard.git
 cd shapeguard
 
-# Start the example app + Redis
-docker compose up
+# Start the example app + Redis (all Docker files live in docker/)
+docker compose -f docker/docker-compose.yml up
 
 # Open in browser:
-# http://localhost:3000/docs       → Swagger UI (dark theme, padlock works)
+# http://localhost:3000/docs              → Swagger UI (dark theme, padlock works)
 # http://localhost:3000/docs/openapi.json → raw OpenAPI 3.1 spec
 ```
 
@@ -664,48 +688,53 @@ docker compose up
 |---------|------|-------------|
 | `app` | 3000 | Example API with Swagger UI |
 | `redis` | 6379 | Distributed rate limit store |
-| `redis-commander` | 8081 | Redis UI (optional — `--profile tools`) |
+| `redis-commander` | 8081 | Redis web UI (optional — `--profile tools`) |
 
 ```bash
 # Start with Redis UI (inspect rate limit state)
-docker compose --profile tools up
+docker compose -f docker/docker-compose.yml --profile tools up
 
 # Example app only (no Redis)
-docker compose up app
+docker compose -f docker/docker-compose.yml up app
 
 # Background mode
-docker compose up -d
+docker compose -f docker/docker-compose.yml up -d
 
 # Tail logs
-docker compose logs -f app
+docker compose -f docker/docker-compose.yml logs -f app
 
-# Stop everything
-docker compose down
+# Stop and remove containers + volumes
+docker compose -f docker/docker-compose.yml down
 ```
 
-Or use the npm scripts shorthand:
+Or use the npm scripts shorthand — they wrap the full paths for you:
 
 ```bash
-npm run docker:up        # docker compose up
-npm run docker:up:bg     # docker compose up -d
-npm run docker:down      # docker compose down
-npm run docker:logs      # docker compose logs -f app
-npm run docker:tools     # docker compose --profile tools up
-npm run docker:build     # docker build -t shapeguard-example .
+npm run docker:up        # docker compose -f docker/docker-compose.yml up
+npm run docker:up:bg     # ... up -d
+npm run docker:down      # ... down
+npm run docker:logs      # ... logs -f app
+npm run docker:tools     # ... --profile tools up
+npm run docker:build     # docker build -f docker/Dockerfile -t shapeguard-example .
+npm run docker:clean     # ... down -v --rmi local  (removes volumes + images)
 ```
 
-### Dockerfile
+### Docker file structure
 
-The provided `Dockerfile` uses a multi-stage build:
+All Docker files live in `docker/` to keep the repo root clean:
 
-- **Stage 1 `builder`** — installs all deps, runs `npm run build`, prunes to production deps
-- **Stage 2 `example`** — minimal Alpine image, non-root user, health check
-
-```bash
-# Build and run the example image manually
-docker build -t shapeguard-example .
-docker run -p 3000:3000 shapeguard-example
 ```
+docker/
+  Dockerfile          ← multi-stage build (deps → builder → example)
+  docker-compose.yml  ← app + Redis + Redis Commander
+  .dockerignore       ← excludes node_modules, dist, test files
+```
+
+The `Dockerfile` uses three stages:
+
+- **`deps`** — installs all npm packages with layer caching
+- **`builder`** — compiles TypeScript → `dist/`, prunes to prod deps
+- **`example`** — minimal Alpine image, non-root user (`shapeguard:1001`), health check
 
 ---
 
