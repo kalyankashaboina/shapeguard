@@ -1,11 +1,11 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // examples/handle-and-dto
 //
-// Shows the two biggest DX improvements in v0.2.0:
+// Shows two core DX patterns:
 //   1. handle()    — replaces [validate(), asyncHandler()] array pattern
 //   2. createDTO() — replaces manual z.infer<typeof ...> on every schema
 //
-// Before v0.2.0 you wrote:
+// Before (without shapeguard):
 //
 //   const CreatePostBodySchema = z.object({ title: z.string(), body: z.string() })
 //   export type CreatePostBody = z.infer<typeof CreatePostBodySchema>
@@ -15,7 +15,7 @@
 //     asyncHandler(async (req, res) => { ... })
 //   ]
 //
-// With v0.2.0 you write:
+// With shapeguard:
 //
 //   export const CreatePostDTO = createDTO(z.object({ title: z.string(), body: z.string() }))
 //   export type CreatePostBody = typeof CreatePostDTO.Input

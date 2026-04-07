@@ -49,7 +49,16 @@ export function errorHandler(opts: ErrorHandlerOptions = {}): ErrorRequestHandle
     }
 
     if (errors.onError) {
-      try { errors.onError(appErr, req) } catch { /* hook must never crash server */ }
+      try {
+        errors.onError(appErr, req)
+      } catch (hookErr) {
+        // Log hook failures so misconfigured Sentry/PagerDuty integrations are visible
+        // Guard activeLogger — it may be undefined if no logger is configured
+        activeLogger?.error(
+          { hookErr: hookErr instanceof Error ? { message: hookErr.message, stack: hookErr.stack } : hookErr },
+          '[shapeguard] errorHandler onError hook threw — check your hook implementation'
+        )
+      }
     }
 
     const clientMessage = (!appErr.isOperational && isProd) ? fallback : appErr.message

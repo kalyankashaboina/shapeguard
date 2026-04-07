@@ -17,7 +17,77 @@
 
 ---
 
-![OpenAPI flow](../assets/shapeguard-openapi.svg)
+
+
+## Choosing a UI <a name="ui"></a>
+
+All UIs load from CDN — no npm install, no bundle impact. Pick the one that fits your team.
+
+| UI | Best for | Features |
+|---|---|---|
+| **Scalar** (default) | Internal + external docs | Code snippets, persistent auth, dark mode, search |
+| **Swagger UI** | Teams already using Swagger | Try-it-out, enhanced with snippets + dark mode |
+| **Redoc** | Public developer portals | Clean three-panel layout (Stripe, Twilio style) |
+
+```ts
+import { serveScalar, serveSwaggerUI, serveRedoc, serveDocs } from 'shapeguard/openapi'
+
+// Scalar — modern, beautiful (default choice)
+app.use('/docs', serveScalar(spec))
+
+// Swagger UI — classic, enhanced
+app.use('/docs', serveSwaggerUI(spec, { theme: 'dark', snippets: true, persist: true }))
+
+// Redoc — read-only public portal
+app.use('/api-reference', serveRedoc(spec))
+
+// serveDocs — mount everything at once
+app.use('/docs', serveDocs(spec, {
+  ui: 'scalar',
+  exports: {
+    json:     '/docs/openapi.json',    // raw spec (Postman import, SDK generators)
+    postman:  '/docs/postman.json',    // Postman Collection v2.1
+    insomnia: '/docs/insomnia.json',   // Insomnia v4 export
+    bruno:    '/docs/bruno.json',      // Bruno collection
+  }
+}))
+```
+
+## API client exports <a name="exports"></a>
+
+Export your spec to any API client — pure functions, no dependencies:
+
+```ts
+import { toPostman, toInsomnia, toBruno } from 'shapeguard/openapi'
+
+// Serve as URL — teammates import directly into their client
+app.get('/docs/postman.json',  (_req, res) => res.json(toPostman(spec)))
+app.get('/docs/insomnia.json', (_req, res) => res.json(toInsomnia(spec)))
+app.get('/docs/bruno.json',    (_req, res) => res.json(toBruno(spec)))
+
+// Or download and commit to repo
+import { writeFileSync } from 'fs'
+writeFileSync('postman.json', JSON.stringify(toPostman(spec), null, 2))
+```
+
+**Postman import:** Team Settings → Import → Link → paste `/docs/postman.json` URL → always up to date.
+
+## Logger in your app <a name="logger"></a>
+
+```ts
+import { logger } from 'shapeguard'
+
+// Use anywhere — controllers, services, cron jobs
+logger.info('Server started on port 3000')
+logger.info({ userId }, 'User logged in')
+logger.warn({ attempts: 3 }, 'Rate limit approaching')
+logger.error(err as object, 'Payment service failed')
+logger.debug({ query }, 'DB query executed')
+```
+
+Same instance as `shapeguard()` middleware. Auto-selects pino → winston → fallback.
+
+---
 
 ## Quick start <a name="quick-start"></a>
 

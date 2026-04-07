@@ -24,6 +24,10 @@ function makeRes() {
     json(b: unknown)     { body = b; return this },
     get statusCode()     { return statusCode },
     get body()           { return body },
+    // Express internals used by errorHandler
+    once(_evt: string, _fn: () => void) { return this },
+    on(_evt: string, _fn: () => void)   { return this },
+    removeListener(_evt: string, _fn: () => void) { return this },
   }
   return res as unknown as Response & { statusCode: number; body: unknown }
 }

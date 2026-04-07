@@ -121,40 +121,63 @@ export function _clearRateLimitStore(): void {
   _rlStore.clear()
 }
 
+// RateLimitStore type — supports both sync in-memory and async Redis stores
+type RateLimitEntry = { count: number; reset: number }
+type SyncStore  = Map<string, RateLimitEntry>
+type AsyncStore = { get(k: string): Promise<RateLimitEntry | null>; set(k: string, v: RateLimitEntry): Promise<void> }
+
 async function checkRateLimit(
   req: Request,
   opts: {
     windowMs:      number
     max:           number
     message?:      string
-    store?:        { get(k: string): Promise<{ count: number; reset: number } | null>; set(k: string, v: { count: number; reset: number }): Promise<void> }
+    inMemoryStore?: SyncStore   // synchronous in-memory store (no TOCTOU race)
+    store?:        AsyncStore   // custom async store (Redis etc.)
     keyGenerator?: (req: Request) => string
   },
 ): Promise<void> {
   // Default key: IP + path — override with keyGenerator for user-based limiting
+  // SECURITY NOTE: x-forwarded-for is spoofable without app.set('trust proxy', 1).
+  // See CONFIGURATION.md for trust proxy guidance.
   const ip  = (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim()
            ?? req.socket?.remoteAddress
            ?? 'unknown'
   const key = opts.keyGenerator ? opts.keyGenerator(req) : `${req.path}:${ip}`
   const now = Date.now()
 
-  // Use custom store (e.g. Redis) or the per-route store injected by validate() (BUG #8 fix)
-  const store = opts.store ?? {
-    get: async (k: string) => _rlStore.get(k) ?? null,
-    set: async (k: string, v: { count: number; reset: number }) => { _rlStore.set(k, v) },
+  // ── Custom async store (Redis, database, etc.) ─────────────────────────────
+  if (opts.store) {
+    const entry = await opts.store.get(key)
+    if (!entry || now > entry.reset) {
+      await opts.store.set(key, { count: 1, reset: now + opts.windowMs })
+      return
+    }
+    const newCount = entry.count + 1
+    await opts.store.set(key, { count: newCount, reset: entry.reset })
+    if (newCount > opts.max) {
+      const retryAfter = Math.ceil((entry.reset - now) / 1000)
+      throw AppError.custom(
+        ErrorCode.RATE_LIMIT_EXCEEDED,
+        opts.message ?? 'Too many requests, please try again later.',
+        429,
+        { retryAfter },
+      )
+    }
+    return
   }
 
-  const entry = await store.get(key)
+  // ── In-memory synchronous store — no async, no TOCTOU race ────────────────
+  // Using synchronous Map operations eliminates the read-modify-write race condition
+  // that allowed concurrent requests to bypass rate limits.
+  const memStore = opts.inMemoryStore!
+  const entry = memStore.get(key)
   if (!entry || now > entry.reset) {
-    // BUG #4 FIX: delete the stale entry so the in-memory map doesn't grow
-    // without bound across unique IP+path combinations (memory leak fix).
-    // Only applies to the built-in in-memory fallback — custom stores manage their own TTL.
-    if (!opts.store) _rlStore.delete(key)
-    await store.set(key, { count: 1, reset: now + opts.windowMs })
+    memStore.set(key, { count: 1, reset: now + opts.windowMs })
     return
   }
   const newCount = entry.count + 1
-  await store.set(key, { count: newCount, reset: entry.reset })
+  memStore.set(key, { count: newCount, reset: entry.reset })
   if (newCount > opts.max) {
     const retryAfter = Math.ceil((entry.reset - now) / 1000)
     throw AppError.custom(
@@ -188,6 +211,19 @@ export function validate(schema: RouteSchema | ValidateOptions): RequestHandler 
   // Each validate() call closes over its own Map so isolation is guaranteed.
   const routeRlStore = new Map<string, { count: number; reset: number }>()
 
+  // Periodic cleanup: remove expired entries from the in-memory store.
+  // Without this, a DDoS with unique source IPs fills the Map with entries
+  // that never get cleaned (entries are only removed when the same key is seen again).
+  // The interval is cleared when the route validator is garbage-collected.
+  // windowMs is not available here, but we do a conservative sweep every 5 minutes.
+  const _cleanupInterval = setInterval(() => {
+    const now = Date.now()
+    for (const [k, v] of routeRlStore) {
+      if (now > v.reset) routeRlStore.delete(k)
+    }
+  }, 5 * 60 * 1000).unref() // .unref() prevents the interval from keeping the process alive
+  void _cleanupInterval  // referenced to satisfy linter
+
   return asyncHandler(async (req: Request, res: Response, next: NextFunction) => {
     try {
       const opts = schema as ValidateOptions
@@ -195,15 +231,10 @@ export function validate(schema: RouteSchema | ValidateOptions): RequestHandler 
       if (opts.rateLimit) {
         // Build route-scoped fallback store using the per-route Map (BUG #8 fix).
         // Custom store (Redis etc.) is still honoured when provided by the user.
+        // Pass inMemoryStore (synchronous) unless user provided a custom async store (Redis etc.)
         const rlOptsWithStore = opts.rateLimit.store
-          ? opts.rateLimit
-          : {
-              ...opts.rateLimit,
-              store: {
-                get: async (k: string) => routeRlStore.get(k) ?? null,
-                set: async (k: string, v: { count: number; reset: number }) => { routeRlStore.set(k, v) },
-              },
-            }
+          ? opts.rateLimit                           // user's async store (Redis etc.)
+          : { ...opts.rateLimit, inMemoryStore: routeRlStore }  // synchronous — no TOCTOU race
         try {
           await checkRateLimit(req, rlOptsWithStore)
         } catch (err) {
@@ -369,9 +400,23 @@ function patchResponseStrip(res: Response, schema: RouteSchema | ValidateOptions
           envelope[dataKey] = stripped
           originalJson(envelope)
         })
-        .catch(() => {
+        .catch((stripErr: unknown) => {
           if (res.headersSent) return
-          originalJson(body)
+          // SECURITY FIX: NEVER send unstripped data on schema failure.
+          // Unstripped data may contain passwordHash, token, or other sensitive fields.
+          // Log the failure and send a generic 500 instead.
+          process.stderr.write(
+            `[shapeguard] patchResponseStrip: strip() failed — sending 500 to prevent data leak. ` +
+            `Error: ${stripErr instanceof Error ? stripErr.message : String(stripErr)}\n`
+          )
+          res.status(500).json({
+            success: false,
+            error: {
+              code:    'INTERNAL_ERROR',
+              message: 'Something went wrong',
+              details: null,
+            },
+          })
         })
 
       return res

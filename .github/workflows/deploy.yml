@@ -1,0 +1,97 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# deploy.yml — shapeguard GitHub Pages Deployment
+#
+# Triggers ONLY after CI passes on main.
+# Deploys the Docusaurus static site to GitHub Pages.
+#
+# Safety guarantees:
+#   - Never deploys if CI fails (tests, build, type check, audit)
+#   - Only deploys from main branch
+#   - Idempotent — reruns produce identical output
+#   - No secrets required beyond GitHub's built-in GITHUB_TOKEN
+#
+# Setup required (one-time):
+#   GitHub → Settings → Pages → Source: GitHub Actions
+# ─────────────────────────────────────────────────────────────────────────────
+
+name: Deploy Website
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+
+permissions:
+  contents: read
+  pages:    write
+  id-token: write
+
+# Only one deploy at a time — never cancel in-progress, let it finish
+concurrency:
+  group: pages-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy to GitHub Pages
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    # Only deploy if CI passed — this is the critical gate
+    if: >
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.head_branch == 'main'
+
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20.x
+          cache: npm
+          cache-dependency-path: website/package-lock.json
+
+      - name: Install website dependencies
+        run: npm ci
+        working-directory: website
+
+      - name: Build Docusaurus site
+        run: npm run build
+        working-directory: website
+        env:
+          NODE_ENV: production
+
+      - name: Setup GitHub Pages
+        uses: actions/configure-pages@v4
+
+      - name: Upload build artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: website/build
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+
+      - name: Deployment summary
+        run: |
+          echo "## 🚀 Deployed shapeguard docs" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**URL:** ${{ steps.deployment.outputs.page_url }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Branch:** main" >> $GITHUB_STEP_SUMMARY
+          echo "**Triggered by:** CI workflow passing" >> $GITHUB_STEP_SUMMARY
+
+      - name: Notify on failure
+        if: failure()
+        run: |
+          echo "## ❌ Deployment FAILED" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "The website failed to build or deploy." >> $GITHUB_STEP_SUMMARY
+          echo "Check the logs above. The previous deployment is still live." >> $GITHUB_STEP_SUMMARY

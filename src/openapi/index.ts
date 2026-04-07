@@ -173,6 +173,7 @@ export function generateOpenAPI(config: OpenAPIConfig): OpenAPISpec {
 
     const dedupeKey = `${method}:${oaPath}`
     if (seen.has(dedupeKey)) {
+      // eslint-disable-next-line no-console
       console.warn(`[shapeguard] generateOpenAPI: duplicate route "${method.toUpperCase()} ${oaPath}" — first definition kept, second ignored.`)
       continue
     }
@@ -822,3 +823,22 @@ function isOptional(z: unknown): boolean {
   const t = zodDef(z).typeName ?? ''
   return t === 'ZodOptional' || t === 'ZodDefault'
 }
+
+// ── Multi-UI docs serving + API client exports ────────────────────────────────
+// All CDN-based — zero npm install, zero bundle impact.
+export {
+  serveScalar,
+  serveSwaggerUI,
+  serveRedoc,
+  serveDocs,
+  toPostman,
+  toInsomnia,
+  toBruno,
+} from './serve.js'
+
+export type {
+  ScalarOptions,
+  SwaggerUIOptions,
+  RedocOptions,
+  ServeDocsOptions,
+} from './serve.js'

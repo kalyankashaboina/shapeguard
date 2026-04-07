@@ -168,16 +168,33 @@ See `docker/docker-compose.yml` for all available services (app, Redis, Redis UI
 
 ## CI pipeline
 
-Every PR runs:
+Every push to `main` and every PR runs **ci.yml** — one file, one job:
 
-| Check | Command | Required |
-|-------|---------|----------|
-| TypeScript | `npm run typecheck` | ✅ |
-| Tests | `npm test` | ✅ |
-| Build | `npm run build` | ✅ |
-| Bundle size | `node scripts/size.mjs` | ✅ (< 50 KB) |
-| CodeQL | automatic | ✅ |
-| Changelog | `CHANGELOG.md` touched | ⚠️ warning |
+| Check | Required |
+|-------|----------|
+| `npm run typecheck` — TypeScript strict | ✅ |
+| `npm test` — all tests must pass | ✅ |
+| `npm run test:coverage` — ≥ 90% coverage | ✅ |
+| `npm run build` — dist must build cleanly | ✅ |
+| Bundle size < 50 KB | ✅ |
+| `npm audit --audit-level=high` | ⚠️ warning only |
+| CHANGELOG.md updated | ⚠️ warning only |
+
+### Workflows
+
+| File | Purpose |
+|------|---------|
+| `ci.yml` | Main quality gate — push + PR |
+| `release.yml` | Auto-publish to npm when `v*` tag is pushed |
+| `codeql.yml` | Security scanning — weekly + push + PR |
+| `auto-merge.yml` | Auto-merges Dependabot patch/minor PRs after CI |
+
+Everything else was removed — for a solo developer, 4 workflows is enough.
+
+### Changelog strategy
+
+**Manual CHANGELOG.md** is the source of truth. Update it under `[Unreleased]` for every change.
+The `release.yml` workflow extracts the changelog section automatically when you tag.
 
 The `release.yml` workflow handles npm publishing automatically when a version tag is pushed.
 
