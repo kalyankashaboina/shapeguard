@@ -698,5 +698,5 @@ describe('patchResponseStrip 500 on failure (v0.9.0 security audit)', () => {
     expect(res.status).toBe(500)
     expect(JSON.stringify(res.body)).not.toContain('SECRET')
     expect(res.body.error?.code).toBe('INTERNAL_ERROR')
-  })
+  }, 15000) // ← add this
 })

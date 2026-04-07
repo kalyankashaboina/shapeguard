@@ -7,4 +7,3 @@ node_modules/
 
 # Environment
 .env
-package-lock.json
