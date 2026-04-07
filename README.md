@@ -7,6 +7,8 @@
 [![codecov](https://codecov.io/gh/kalyankashaboina/shapeguard/branch/main/graph/badge.svg)](https://codecov.io/gh/kalyankashaboina/shapeguard)
 [![CodeQL](https://github.com/kalyankashaboina/shapeguard/actions/workflows/codeql.yml/badge.svg)](https://github.com/kalyankashaboina/shapeguard/actions/workflows/codeql.yml)
 <!-- publish -->
+
+[![npm](https://img.shields.io/badge/npm-shapeguard-red)](https://www.npmjs.com/package/shapeguard)
 [![npm version](https://img.shields.io/npm/v/shapeguard?label=shapeguard&color=0f6e56)](https://npmjs.com/package/shapeguard)
 [![npm downloads](https://img.shields.io/npm/dm/shapeguard?color=0f6e56)](https://npmjs.com/package/shapeguard)
 [![bundle size](https://img.shields.io/bundlephobia/minzip/shapeguard?label=minzipped)](https://bundlephobia.com/package/shapeguard)
