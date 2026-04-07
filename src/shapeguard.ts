@@ -30,6 +30,9 @@ export function shapeguard(config: ShapeguardConfig = {}): RequestHandler {
   const ridHeader    = (requestIdConfig.header    ?? 'x-request-id').toLowerCase()
   const ridGenerator = requestIdConfig.generator  ?? generateRequestId
 
+  // Create a per-app logger from config — independent of the user-facing singleton.
+  // The singleton (import { logger } from 'shapeguard') is for user code.
+  // Each shapeguard() instance needs its OWN logger so test apps don't share state.
   const logger     = createLogger(loggerConfig)
   const resHelpers = injectResHelpers(responseConfig)
   const requestLog = requestLogger(logger, loggerConfig)

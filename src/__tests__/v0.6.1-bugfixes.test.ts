@@ -47,7 +47,14 @@ function makeRes(): Response & { statusCode: number; body: unknown } {
     locals: {},
     status(code: number) { statusCode = code; return this },
     json(b: unknown) { body = b; return this },
+    send(b: unknown) { body = b; return this },
+    end() { return this },
     setHeader: vi.fn(),
+    getHeader: vi.fn(),
+    // Express event emitter methods needed by shapeguard middleware
+    once(_evt: string, _fn: () => void) { return this },
+    on(_evt: string, _fn: () => void)   { return this },
+    removeListener(_evt: string, _fn: () => void) { return this },
     get statusCode() { return statusCode },
     get body() { return body },
   }
@@ -237,12 +244,12 @@ describe('BUG #5 — errorHandler auto-discovers shapeguard logger', () => {
     expect(res.statusCode).toBe(404)
   })
 
-  // it('does not crash when shapeguard() req.app is undefined (unit-test mock)', () => {
-  //   const mw = shapeguard({ logger: { silent: true } })
-  //   const req = makeReq() // no .app
-  //   const res = makeRes()
-  //   expect(() => mw(req, res, fakeNext)).not.toThrow()
-  // })
+  it('does not crash when shapeguard() req.app is undefined (unit-test mock)', () => {
+    const mw = shapeguard({ logger: { silent: true } })
+    const req = makeReq() // no .app
+    const res = makeRes()
+    expect(() => mw(req, res, fakeNext)).not.toThrow()
+  })
 })
 
 // ═══════════════════════════════════════════════════════════════════════════

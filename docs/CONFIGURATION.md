@@ -423,6 +423,10 @@ with wrong HTTP method. Works with parameterized routes like `/:id`.
 
 Built-in rate limiting. No extra package needed. Applied per IP + route path by default.
 
+> ⚠️ **Single-process only.** The built-in store is an in-memory Map per route. In multi-process deployments (PM2 cluster, Kubernetes pods), each process maintains its own counter — effective limit is `max × processes`. For distributed rate limiting, pass a Redis store: `defineRoute({ rateLimit: { windowMs, max, store: myRedisStore } })`
+>
+> ⚠️ **IP spoofing without trust proxy.** The default key uses `x-forwarded-for`, which is spoofable. Set `app.set('trust proxy', 1)` before `shapeguard()` for correct IP detection behind a load balancer.
+
 ```ts
 defineRoute({
   body:      CreateUserDTO,

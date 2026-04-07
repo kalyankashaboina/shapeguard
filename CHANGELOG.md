@@ -15,6 +15,152 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [0.9.0] — 2026-04-05
+
+> **Minor release — logger singleton + multi-UI docs system + security fixes. Zero breaking changes.**
+
+### Security fixes (from senior architect audit)
+
+- **`specJson` XSS** in doc UIs — escaped `</script>` sequences in all HTML templates
+- **`patchResponseStrip` data leak** — sends 500 instead of unstripped sensitive data on schema failure
+- **`joiAdapter` + `yupAdapter` `allErrors` inverted** — fixed: `!(opts.allErrors ?? true)` is correct
+- **Dockerfile `CMD`** — `src/index.js` → `dist/index.js` (was crashing on every container start)
+- **Rate limiter TOCTOU race** — synchronous `Map` operations eliminate concurrent bypass
+- **`serveDocs` bare `require()`** — uses `createRequire(import.meta.url)` for ESM safety
+- **CI audit gate** — removed `continue-on-error`, level set to `--audit-level=critical`
+- **Docker hardcoded `HTTP_PASSWORD`** — uses `${REDIS_COMMANDER_PASSWORD:-changeme}` + `.env.example`
+- **`onError` hook** — logs failures instead of silently swallowing them
+- **`Math.random()` for IDs** — uses `crypto.randomBytes()` in `toInsomnia`/`toBruno`
+- **Unbounded rate limit Map** — periodic `setInterval` cleanup with `.unref()`
+- **`tsconfig.json`** — added `isolatedModules: true`
+- **`dependabot.yml`** — added pino/pino-pretty major-version protection
+- **`ERRORS.md`** — removed broken `shapeguard-error-types.svg` image reference
+- **`CONFIGURATION.md`** — added trust proxy and multi-process rate limit warnings
+- **Lint step** added to CI
+- **Post-publish smoke test** added to release.yml
+
+> **Minor release — new logger export + multi-UI docs system. Zero breaking changes.**
+
+### Added
+
+#### `import { logger } from 'shapeguard'` — shared logger singleton
+
+```ts
+import { logger } from 'shapeguard'
+logger.info('Server started on port 3000')
+logger.info({ userId }, 'User logged in')
+logger.warn({ attempts: 3 }, 'Rate limit approaching')
+logger.error(err as object, 'Payment service failed')
+```
+
+The same instance used by `shapeguard()` middleware. Auto-selects:
+pino (if installed) → winston (if installed) → built-in fallback.
+Works without `shapeguard()` middleware — standalone import.
+
+```ts
+import { configureLogger } from 'shapeguard'
+configureLogger({ level: 'warn', silent: process.env.NODE_ENV === 'test' })
+```
+
+#### Multi-UI docs system — all CDN-based, zero npm install
+
+**Scalar UI** (default — modern, beautiful, client code snippets):
+```ts
+import { serveScalar } from 'shapeguard/openapi'
+app.use('/docs', serveScalar(spec))
+```
+
+**Swagger UI** (classic, enhanced with persistent auth + code snippets + dark mode):
+```ts
+import { serveSwaggerUI } from 'shapeguard/openapi'
+app.use('/docs', serveSwaggerUI(spec, { theme: 'dark', snippets: true, persist: true }))
+```
+
+**Redoc** (read-only public portal — Stripe-style):
+```ts
+import { serveRedoc } from 'shapeguard/openapi'
+app.use('/api-reference', serveRedoc(spec))
+```
+
+**serveDocs()** — mount everything at once:
+```ts
+import { serveDocs } from 'shapeguard/openapi'
+app.use('/docs', serveDocs(spec, {
+  ui: 'scalar',
+  exports: {
+    json:     '/docs/openapi.json',
+    postman:  '/docs/postman.json',
+    insomnia: '/docs/insomnia.json',
+    bruno:    '/docs/bruno.json',
+  }
+}))
+```
+
+#### API client exports — pure functions, no dependencies
+
+```ts
+import { toPostman, toInsomnia, toBruno } from 'shapeguard/openapi'
+app.get('/docs/postman.json',  (_req, res) => res.json(toPostman(spec)))
+app.get('/docs/insomnia.json', (_req, res) => res.json(toInsomnia(spec)))
+app.get('/docs/bruno.json',    (_req, res) => res.json(toBruno(spec)))
+```
+
+### Fixed
+
+- `console.warn` in `src/router/with-shape.ts` → `process.stderr.write` (no console in prod)
+- `console.warn` in `src/openapi/index.ts` → `process.stderr.write`
+- `console.log` in `src/logging/logger.ts` is intentional (it IS the fallback logger) — documented
+
+### Architecture note
+
+Logger resolution order (automatic):
+1. `logger.instance` provided in config → use it
+2. pino installed → use pino
+3. winston installed → use winston adapter  
+4. none → built-in console fallback
+
+---
+
+## [0.8.3] — 2026-03-31
+
+> **CI/CD simplification + test coverage to 90%.** No code changes, no breaking changes.
+
+### Changed
+
+- **CI/CD workflows reduced from 12 → 4** (ci.yml, release.yml, codeql.yml, auto-merge.yml)
+  - `pr-check.yml` removed — ci.yml already runs on PRs
+  - `benchmark.yml` removed — not useful for a solo developer
+  - `scorecard.yml` removed — score is ~60; enable branch protection in GitHub settings to improve it
+  - `release-drafter.yml` (workflow + config) removed — manual CHANGELOG.md is the chosen strategy
+  - `greet.yml` removed — no community yet
+  - `labeler.yml` (workflow + config) removed — overhead not worth it for solo dev
+  - `lock.yml` removed — issues don't accumulate at solo-dev scale
+  - `stale.yml` removed — same reason
+  - `ci.yml` now handles both push-to-main and PR quality gate (merged from pr-check.yml)
+  - `ci.yml` changelog check and bundle size report added for PRs
+  - `ci.yml` npm audit raised to `--audit-level=high` (was moderate)
+
+- **Coverage thresholds raised to 90%** (was 85%)
+
+### Added
+
+- **Tests for previously-uncovered source files:**
+  - `joiAdapter()` — 9 test cases covering parse, safeParse, strip, allErrors, error mapping
+  - `yupAdapter()` — 10 test cases covering parse, safeParse, strip, inner error flattening
+  - `winstonAdapter()` — 6 test cases covering arg-order flip, invalid logger detection
+  - `createDTO()` — 10 test cases covering all methods, _isDTO flag, non-Zod rejection
+  - `handle()` — 3 test cases covering return shape and error forwarding
+  - `mockRequest()` — 9 test cases covering all options, get(), ip, socket
+  - `mockResponse()` — 10 test cases covering status, json, end, setHeader, shapeguard helpers
+  - `mockNext()` — 5 test cases covering called, error capture
+  - `isDev` — basic type check
+
+- **CHANGELOG strategy is MANUAL (Option A)** — single source of truth in CHANGELOG.md.
+  release-drafter auto-notes are not used. Reason: for a solo developer, maintaining one
+  clean CHANGELOG.md is cleaner than having two sources of release notes.
+
+---
+
 ## [0.8.2] — 2026-03-31
 
 > **Patch:** Asset cleanup, example updates, docs hygiene. No code changes.

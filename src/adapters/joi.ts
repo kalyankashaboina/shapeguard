@@ -16,7 +16,7 @@ type JoiSchema = {
 
 export interface JoiAdapterOptions {
   // Collect all validation errors instead of stopping at the first.
-  // Maps to Joi's abortEarly: false (default: false — collect all errors)
+  // Maps to Joi's abortEarly option. Default: true (collect all errors).
   allErrors?: boolean
 }
 
@@ -24,8 +24,10 @@ export function joiAdapter<TOutput = unknown>(
   schema: JoiSchema,
   opts:   JoiAdapterOptions = {},
 ): SchemaAdapter<TOutput> {
-  // allErrors defaults to true (collect all) — abortEarly is the inverse
-  const abortEarly = opts.allErrors === false
+  // allErrors defaults to true (collect all errors). abortEarly is the inverse.
+  // allErrors:true  → abortEarly:false (collect all) ✅
+  // allErrors:false → abortEarly:true  (stop at first) ✅
+  const abortEarly = !(opts.allErrors ?? true)
 
   return {
     library: 'joi',

@@ -47,7 +47,6 @@ Frontend writes one handler. Forever.
 
 ## res helpers <a name="res-helpers"></a>
 
-[![Res helpers](../assets/shapeguard-res-helpers.svg)]
 
 
 Injected by `shapeguard()` on every route. No import needed in controllers.
@@ -340,7 +339,6 @@ Allow: GET, PUT, DELETE
 
 ## withShape() — per-route override <a name="withshape"></a>
 
-[![withShape](../assets/shapeguard-withshape.svg)]
 
 Some routes need a completely different response shape.
 Health checks, metrics, webhooks, legacy endpoints.

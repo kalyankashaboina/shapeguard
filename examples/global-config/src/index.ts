@@ -1,7 +1,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // examples/global-config
 //
-// Shows all v0.2.0 global configuration options:
+// Shows all global configuration options for shapeguard():
 //   1. validation.strings.trim     — auto-trim all string fields
 //   2. validation.strings.lowercase — auto-lowercase all string fields
 //   3. logger.silent               — suppress all logs (useful in tests)

@@ -15,7 +15,6 @@
 
 ---
 
-[![Testing helpers](../assets/shapeguard-testing-helpers.svg)]
 
 ## Why test helpers? <a name="why"></a>
 

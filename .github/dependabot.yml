@@ -1,14 +1,13 @@
 # ─────────────────────────────────────────────────────────────────────────────
 # dependabot.yml — Automated dependency updates
 #
-# Opens PRs weekly for outdated packages. Limits to 5 open PRs at once.
-# Major version bumps for express and zod are ignored — they break the API.
+# Weekly PRs for outdated packages. auto-merge.yml handles patch/minor.
+# Major bumps always need manual review.
 # ─────────────────────────────────────────────────────────────────────────────
 
 version: 2
 
 updates:
-  # ── npm dependencies ───────────────────────────────────────────────────────
   - package-ecosystem: npm
     directory: /
     schedule:
@@ -17,33 +16,26 @@ updates:
       time: '09:00'
       timezone: UTC
     open-pull-requests-limit: 5
-    labels:
-      - dependencies
-    reviewers:
-      - kalyankashaboina
+    labels: [dependencies]
+    reviewers: [kalyankashaboina]
     commit-message:
       prefix: 'chore(deps)'
       include: scope
     ignore:
-      # Major bumps for required peer deps break user apps — handled manually
       - dependency-name: express
         update-types: ['version-update:semver-major']
       - dependency-name: zod
         update-types: ['version-update:semver-major']
+      - dependency-name: pino
+        update-types: ['version-update:semver-major']
+      - dependency-name: pino-pretty
+        update-types: ['version-update:semver-major']
     groups:
-      # Group all vitest updates into one PR
       vitest:
-        patterns:
-          - vitest
-          - '@vitest/*'
-      # Group all typescript + tsup updates
+        patterns: [vitest, '@vitest/*']
       build-tools:
-        patterns:
-          - typescript
-          - tsup
-          - '@types/*'
+        patterns: [typescript, tsup, '@types/*']
 
-  # ── GitHub Actions ──────────────────────────────────────────────────────────
   - package-ecosystem: github-actions
     directory: /
     schedule:
@@ -52,10 +44,6 @@ updates:
       time: '09:00'
       timezone: UTC
     open-pull-requests-limit: 3
-    labels:
-      - dependencies
-      - github-actions
-    reviewers:
-      - kalyankashaboina
+    labels: [dependencies, github-actions]
     commit-message:
       prefix: 'chore(ci)'

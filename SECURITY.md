@@ -6,10 +6,10 @@ shapeguard is a security-focused Express middleware library. We take vulnerabili
 
 | Version | Security fixes |
 |---------|---------------|
+| 0.9.x   | ✅ Active (current) |
 | 0.8.x   | ✅ Active      |
-| 0.7.x   | ✅ Active      |
-| 0.6.x   | ⚠️ Critical only |
-| < 0.6.0 | ❌ Not supported |
+| 0.7.x   | ⚠️ Critical only |
+| < 0.7.0 | ❌ Not supported |
 
 ## Reporting a vulnerability
 

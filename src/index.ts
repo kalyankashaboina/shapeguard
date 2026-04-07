@@ -6,6 +6,10 @@
 // ── Core middleware ───────────────────────────
 export { shapeguard }           from './shapeguard.js'
 
+// ── Logger singleton — use anywhere in your app ──
+// Same instance used by shapeguard() middleware. Auto-selects pino → winston → fallback.
+export { logger, configureLogger } from './logging/singleton.js'
+
 // ── Validation ────────────────────────────────
 export { validate }             from './validation/validate.js'
 export type { ValidateOptions } from './validation/validate.js'
@@ -15,9 +19,21 @@ export { handle }               from './validation/handle.js'
 export { createDTO }            from './validation/create-dto.js'
 export type { DTOResult }       from './validation/create-dto.js'
 
-// ── OpenAPI ───────────────────────────────────
+// ── OpenAPI — spec generation ─────────────────
 export { generateOpenAPI, createDocs }      from './openapi/index.js'
 export type { OpenAPIConfig, OpenAPISpec, DocsConfig, SecuritySchemeType, InlineRouteDefinition } from './openapi/index.js'
+
+// ── OpenAPI — docs UIs (CDN-based, zero install) ──
+// serveScalar: modern UI with code snippets + persistent auth (default)
+// serveSwaggerUI: classic Swagger UI, enhanced with dark mode + snippets
+// serveRedoc: read-only public portal (Stripe-style)
+// serveDocs: mount all endpoints at once
+export { serveScalar, serveSwaggerUI, serveRedoc, serveDocs } from './openapi/index.js'
+export type { ScalarOptions, SwaggerUIOptions, RedocOptions, ServeDocsOptions } from './openapi/index.js'
+
+// ── OpenAPI — API client exports (pure functions, no deps) ─
+// toPostman: Postman Collection v2.1 · toInsomnia: Insomnia v4 · toBruno: Bruno
+export { toPostman, toInsomnia, toBruno } from './openapi/index.js'
 
 export { verifyWebhook } from './security/webhook.js'
 export type { WebhookConfig } from './security/webhook.js'

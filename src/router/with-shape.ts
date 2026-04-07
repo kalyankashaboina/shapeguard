@@ -40,6 +40,8 @@ export function withShape(shape: ShapeMode): RequestHandler {
         // Warn in development when a token path does not exist in the response.
         // Silent undefined in prod is fine — noisy in dev catches typos early.
         if (isDev && value === undefined) {
+          // dev-only warning — uses console.warn so tests can spy on it
+          // eslint-disable-next-line no-console
           console.warn(
             `[shapeguard] withShape: key "${outputKey}" resolved to undefined. ` +
             `Token "${token}" does not exist in the response. Check the path.`

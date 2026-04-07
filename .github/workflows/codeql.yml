@@ -1,11 +1,16 @@
 # ─────────────────────────────────────────────────────────────────────────────
 # codeql.yml — GitHub CodeQL Security Analysis
 #
-# Scans TypeScript source for security vulnerabilities and code quality issues.
+# Runs on push to main, PRs, and weekly.
 # Results appear in Security → Code scanning tab.
+#
+# To improve the OpenSSF Scorecard score (currently ~60):
+#   - Enable branch protection on main in GitHub settings
+#   - Require PR reviews before merging
+#   - This workflow contributes to the SAST check
 # ─────────────────────────────────────────────────────────────────────────────
 
-name: CodeQL Security Scan
+name: CodeQL
 
 on:
   push:
@@ -13,7 +18,7 @@ on:
   pull_request:
     branches: [main]
   schedule:
-    - cron: '0 8 * * 1'    # weekly Monday 8am UTC
+    - cron: '0 8 * * 1'
 
 permissions:
   actions:         read
@@ -22,40 +27,31 @@ permissions:
 
 jobs:
   analyze:
-    name: Analyze (TypeScript)
+    name: CodeQL Analysis
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: 20.x
           cache: npm
 
-      - name: Install dependencies
-        run: npm ci
+      - run: npm ci
 
-      - name: Initialize CodeQL
-        uses: github/codeql-action/init@v3
+      - uses: github/codeql-action/init@v3
         with:
           languages: typescript
-          # Both security and quality queries — shapeguard is a security library
           queries: security-and-quality
           config: |
             paths-ignore:
               - examples/**
               - dist/**
 
-      - name: Build for CodeQL
-        run: npm run build
+      - run: npm run build
 
-      - name: Perform CodeQL Analysis
-        uses: github/codeql-action/analyze@v3
+      - uses: github/codeql-action/analyze@v3
         with:
           category: /language:typescript
-          output: /tmp/codeql-results
-          upload: always
