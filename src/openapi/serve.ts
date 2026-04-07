@@ -38,7 +38,7 @@ function esc(s: string): string {
  * This function escapes all </ to <\/ to prevent script tag injection.
  */
 function safeJson(o: unknown): string {
-  return JSON.stringify(o).replace(/<\//g, '<\/')
+  return JSON.stringify(o).replace(/<\//g, '<\\/')
 }
 
 function htmlHandler(html: string): RequestHandler {

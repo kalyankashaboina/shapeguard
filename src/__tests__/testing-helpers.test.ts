@@ -5,6 +5,7 @@
 
 import { describe, it, expect } from 'vitest'
 import { mockRequest, mockResponse, mockNext } from '../testing/index.js'
+import { AppError } from '../errors/AppError.js'
 
 describe('mockRequest()', () => {
   it('returns defaults when called with no options', () => {
@@ -169,8 +170,7 @@ describe('mockNext()', () => {
     expect(next.called).toBe(true)
   })
 
-  it('captures AppError instances', async () => {
-    const { AppError } = await import('../../errors/AppError.js')
+  it('captures AppError instances', () => {
     const next  = mockNext()
     const error = AppError.notFound('User')
     next(error)

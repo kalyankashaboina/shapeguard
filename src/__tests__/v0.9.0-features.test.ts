@@ -33,6 +33,9 @@ import {
 import type { OpenAPISpec } from '../../openapi/index.js'
 import { joiAdapter } from '../adapters/joi.js'
 import { yupAdapter } from '../adapters/yup.js'
+import { handle } from '../validation/handle.js'
+import { defineRoute } from '../validation/define-route.js'
+import { errorHandler } from '../errors/error-handler.js'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Helpers
@@ -334,7 +337,7 @@ describe('serveRedoc()', () => {
     } as unknown as OpenAPISpec
     const { req, res } = mockHtmlRequest()
     serveRedoc(xssSpec)(req, res, () => {})
-    expect(res.body).toContain('</script><img onerror=alert(1)>')
+    expect(res.body).not.toContain('</script><img onerror=alert(1)>')
     expect(res.body).toContain('<\\/script>')
   })
 
@@ -673,9 +676,6 @@ describe('patchResponseStrip 500 on failure (v0.9.0 security audit)', () => {
 
     const { default: expressApp } = express
     const { default: request }   = supertest
-    const { handle }             = await import('../../validation/handle.js')
-    const { defineRoute }        = await import('../../validation/define-route.js')
-    const { errorHandler }       = await import('../../errors/error-handler.js')
 
     // Schema whose strip() always rejects
     const badSchema = {
