@@ -22,11 +22,11 @@ export function injectResHelpers(config: ResponseConfig = {}): RequestHandler {
     }
     res.created = function(opts: ResOkOpts): void {
       if (res.headersSent) return
-      res.status(201).json(buildSuccess(opts.data ?? null, opts.message ?? '', config))
+      res.status(opts.status ?? 201).json(buildSuccess(opts.data ?? null, opts.message ?? '', config))
     }
     res.accepted = function(opts: ResOkOpts): void {
       if (res.headersSent) return
-      res.status(202).json(buildSuccess(opts.data ?? null, opts.message ?? '', config))
+      res.status(opts.status ?? 202).json(buildSuccess(opts.data ?? null, opts.message ?? '', config))
     }
     res.noContent = function(): void {
       if (res.headersSent) return

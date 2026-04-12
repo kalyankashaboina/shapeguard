@@ -12,6 +12,7 @@ No global setup needed.
 | [with-openapi](./with-openapi/) | Full OpenAPI + Swagger UI + webhooks + cursor pagination | `generateOpenAPI()`, `createDocs()`, `verifyWebhook()`, `res.cursorPaginated()`, `AppError.define()` |
 | [with-webhook](./with-webhook/) | HMAC webhook verification — Stripe, GitHub, Shopify, custom | `verifyWebhook()`, all provider presets |
 | [with-testing](./with-testing/) | Unit-testing controllers without an HTTP server | `mockRequest()`, `mockResponse()`, `mockNext()` |
+| [production-setup](./production-setup/) | Health checks, graceful shutdown, request timeout, GitHub webhook dedup | `healthCheck()`, `gracefulShutdown()`, `defineRoute({ timeout })`, `inMemoryDeduplicator()` |
 
 ## Running an example
 

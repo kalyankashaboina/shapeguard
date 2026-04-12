@@ -227,3 +227,85 @@ When `logResponseBody: true` is configured, the logger captures the body from
 the inner `res.json` wrapper — which is called by the strip promise's `.then()`.
 So logs always show the **post-strip** body (what the client actually received),
 not the pre-strip body. This is correct behaviour, not a bug.
+
+---
+
+## Logger isolation between tests <a name="logger-isolation"></a>
+
+The shapeguard logger is a module-level singleton. Without resetting it, test suites share
+the same logger instance, which can cause unexpected log output in silent test runs.
+
+```ts
+import { resetLoggerForTesting, configureLogger } from 'shapeguard'
+
+// In your vitest/jest setup file:
+beforeEach(() => {
+  resetLoggerForTesting()
+  configureLogger({ silent: true })
+})
+```
+
+`resetLoggerForTesting()` clears the singleton instance. The next `configureLogger()` or first
+`logger.info()` call creates a fresh instance with the new config.
+
+---
+
+## Testing healthCheck() <a name="health-check-testing"></a>
+
+`healthCheck()` is a standard Express middleware — use `mockRequest` and test it directly:
+
+```ts
+import { healthCheck } from 'shapeguard'
+import { mockRequest, mockResponse } from 'shapeguard/testing'
+
+it('returns 200 when all checks pass', async () => {
+  const middleware = healthCheck({
+    checks: {
+      db:  async () => { /* resolves */ },
+      mem: healthCheck.memory({ maxPercent: 99 }),
+    }
+  })
+
+  const req = mockRequest({ method: 'GET', path: '/health' })
+  const res = mockResponse()
+  await middleware(req as any, res as any)
+
+  expect(res._result().statusCode).toBe(200)
+  expect((res._result().body as any).status).toBe('healthy')
+})
+
+it('returns 503 when a check fails', async () => {
+  const middleware = healthCheck({
+    checks: {
+      db: async () => { throw new Error('Connection refused') },
+    }
+  })
+
+  const req = mockRequest({ method: 'GET', path: '/health' })
+  const res = mockResponse()
+  await middleware(req as any, res as any)
+
+  expect(res._result().statusCode).toBe(503)
+  expect((res._result().body as any).checks.db).toBe('error')
+})
+```
+
+---
+
+## Testing controllers with cursorPaginated <a name="cursor-pagination-testing"></a>
+
+`mockResponse()` now includes `cursorPaginated` — previously missing:
+
+```ts
+it('cursor-paginates results', async () => {
+  const req = mockRequest({ query: { cursor: 'abc' } })
+  const res = mockResponse()
+
+  await listItems[1](req, res, mockNext())
+
+  const body = res._result().body as any
+  expect(body.success).toBe(true)
+  expect(body.data.hasMore).toBe(true)
+  expect(body.data.nextCursor).toBeDefined()
+})
+```

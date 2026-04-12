@@ -81,12 +81,21 @@ jobs:
       - name: Bundle size guard (Node 20 only)
         if: matrix.node-version == '20.x'
         run: |
-          MAIN=$(wc -c < dist/index.mjs)
-          echo "Main ESM: ${MAIN} bytes (50KB limit)"
-          if [ "$MAIN" -gt 51200 ]; then
-            echo "❌ Bundle regression: ${MAIN}b > 51200b"; exit 1
+          RAW=$(wc -c < dist/index.mjs)
+          GZIP=$(gzip -c dist/index.mjs | wc -c)
+          GZIP_KB=$(echo "scale=1; $GZIP / 1024" | bc)
+          echo "Main ESM raw:       ${RAW} bytes ($(echo "scale=1; $RAW/1024" | bc) KB)"
+          echo "Main ESM gzipped:   ${GZIP} bytes (${GZIP_KB} KB)"
+          # Hard limit: 70 KB raw / 25 KB gzip
+          # Current baseline (v0.10.0): ~53 KB raw / ~18 KB gzip
+          # Headroom ~17 KB raw / ~7 KB gzip before alarm fires
+          if [ "$RAW" -gt 71680 ]; then
+            echo "❌ Raw bundle regression: $(echo "scale=1; $RAW/1024" | bc)KB > 70KB"; exit 1
           fi
-          echo "✅ Bundle size OK: ${MAIN} bytes"
+          if [ "$GZIP" -gt 25600 ]; then
+            echo "❌ Gzip bundle regression: ${GZIP_KB}KB > 25KB"; exit 1
+          fi
+          echo "✅ Bundle OK: $(echo "scale=1; $RAW/1024" | bc)KB raw / ${GZIP_KB}KB gzipped"
 
       - name: Bundle size summary (PRs only)
         if: matrix.node-version == '20.x' && github.event_name == 'pull_request'

@@ -416,10 +416,12 @@ Stable string codes — safe to match in frontend code.
 | `PARAM_POLLUTION` | 400 | pre-parse | query param sent as array (?x=a&x=b) |
 | `PROTO_POLLUTION` | 400 | pre-parse | `__proto__` in body |
 | `RATE_LIMIT_EXCEEDED` | 429 | validate() | per-route rate limit hit |
+| `REQUEST_TIMEOUT` | 408 | validate() | handler did not respond within timeout |
 | `WEBHOOK_SIGNATURE_MISSING` | 400 | verifyWebhook() | signature header absent |
 | `WEBHOOK_SIGNATURE_INVALID` | 401 | verifyWebhook() | HMAC mismatch |
 | `WEBHOOK_TIMESTAMP_MISSING` | 400 | verifyWebhook() | timestamp field absent (Stripe/Svix) |
 | `WEBHOOK_TIMESTAMP_EXPIRED` | 400 | verifyWebhook() | timestamp outside tolerance window |
+| `WEBHOOK_DELIVERY_DUPLICATE` | 400 | verifyWebhook() | delivery ID already processed (replay prevention) |
 
 ### `AppError.define()` — typed error factory
 

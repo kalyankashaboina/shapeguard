@@ -59,6 +59,12 @@ app.use(shapeguard({
   //   NODE_ENV === 'production'  → debug: false
   debug: false,
 
+  // ── global request timeout ──────────────────────────────────────
+  // Applies to ALL routes unless overridden by defineRoute({ timeout }).
+  // Handler must respond within this time or a 408 is returned.
+  // Default: no timeout.
+  timeout: 30_000,  // 30 seconds
+
   // ── request ID ─────────────────────────────────────────────────
   // Controls how req.id is generated and where it comes from.
   requestId: {
@@ -617,3 +623,131 @@ router.post('/webhooks/custom',
 | `WEBHOOK_SIGNATURE_INVALID` | 401 | HMAC mismatch |
 | `WEBHOOK_TIMESTAMP_MISSING` | 400 | Timestamp field absent (Stripe/Svix only) |
 | `WEBHOOK_TIMESTAMP_EXPIRED` | 400 | Timestamp outside tolerance window — replay attack |
+
+---
+
+## Per-route timeout <a name="timeout"></a>
+
+Set on individual routes via `defineRoute({ timeout })` or globally in `shapeguard({ timeout })`.
+
+```ts
+// Per-route — overrides global
+defineRoute({
+  body:    CreateUserDTO,
+  timeout: 5_000,   // handler must respond within 5s → 408 if not
+})
+
+// Global — applies to every route
+app.use(shapeguard({ timeout: 30_000 }))
+```
+
+When a handler does not respond within the timeout, shapeguard writes a `408 Request Timeout`
+response directly. The response body matches the standard error envelope:
+
+```json
+{
+  "success": false,
+  "message": "Request timed out after 5000ms",
+  "error": { "code": "REQUEST_TIMEOUT", "message": "Request timed out after 5000ms", "details": null }
+}
+```
+
+**Note:** timeout is implemented with `setTimeout` inside the validate middleware. It fires only
+if `res.headersSent` is false — if the handler responds first, the timer is cleared immediately
+via `res.once('finish', clearTimeout)`.
+
+---
+
+## Health check — `healthCheck()` <a name="healthcheck"></a>
+
+Standalone middleware. No `shapeguard()` required.
+
+```ts
+import { healthCheck } from 'shapeguard'
+
+app.use('/health', healthCheck({
+  checks: {
+    db:    () => db.query('SELECT 1'),         // async — resolves = pass, throws = fail
+    redis: () => redis.ping(),
+    mem:   healthCheck.memory({ maxPercent: 90 }),  // built-in
+    env:   healthCheck.env(['DATABASE_URL']),         // built-in
+    up:    healthCheck.uptime(),                      // always passes
+  },
+  timeout:        5_000,   // per-check timeout (default: 5000ms)
+  healthyStatus:  200,     // status code when all pass (default: 200)
+  unhealthyStatus: 503,    // status code when any fail (default: 503)
+}))
+```
+
+All checks run in parallel. Each has its own timeout. One slow check does not block others.
+
+### Response shape
+
+```json
+// 200 — all healthy
+{
+  "status": "healthy",
+  "checks": { "db": "ok", "redis": "ok", "mem": "ok" },
+  "uptime": 3600,
+  "version": "v22.0.0",
+  "time": "2026-04-10T09:00:00.000Z"
+}
+
+// 503 — any failing
+{
+  "status": "unhealthy",
+  "checks": { "db": "ok", "redis": "timeout", "mem": "ok" },
+  "uptime": 3600,
+  "version": "v22.0.0",
+  "time": "2026-04-10T09:00:00.000Z"
+}
+```
+
+Check result values: `"ok"` | `"error"` | `"timeout"`
+
+---
+
+## Graceful shutdown — `gracefulShutdown()` <a name="gracefulshutdown"></a>
+
+Standalone — no `shapeguard()` required.
+
+```ts
+import { gracefulShutdown, logger } from 'shapeguard'
+
+const server = app.listen(3000)
+
+const stopShutdown = gracefulShutdown(server, {
+  // Max time to wait for in-flight requests to complete (default: 30_000)
+  drainMs: 30_000,
+
+  // Additional time after drain before force exit (default: 5_000)
+  forceExitMs: 5_000,
+
+  // Runs after all connections drained — close DB, Redis, queues
+  onShutdown: async () => {
+    await db.close()
+    await redis.quit()
+  },
+
+  // Called when server.close() callback fires
+  onDrained: () => logger.info({}, 'All requests drained'),
+
+  // Logger for shutdown events (default: console)
+  logger,
+
+  // Which signals to listen to (default: ['SIGTERM', 'SIGINT'])
+  signals: ['SIGTERM', 'SIGINT'],
+})
+
+// stopShutdown() removes all signal listeners — use in tests
+// beforeEach(() => { ... }) / afterEach(() => stopShutdown())
+```
+
+On receiving a signal:
+1. `server.close()` — stops accepting new connections
+2. Waits up to `drainMs` for in-flight requests to finish
+3. Runs `onShutdown` hook
+4. `onDrained` callback fires
+5. Force-kills remaining connections after `drainMs` if any remain
+6. Process exits
+

@@ -1,6 +1,6 @@
 {
   "name": "shapeguard",
-  "version": "0.9.0",
+  "version": "0.10.0",
   "description": "FastAPI-style validation, response shaping, and error handling for Node.js + Express",
   "author": "Kalyan Kashaboina <kalyankashaboina07@gmail.com> (https://github.com/kalyankashaboina)",
   "license": "MIT",
@@ -75,7 +75,8 @@
     "docker:down": "docker compose -f docker/docker-compose.yml down",
     "docker:logs": "docker compose -f docker/docker-compose.yml logs -f app",
     "docker:tools": "docker compose -f docker/docker-compose.yml --profile tools up",
-    "docker:clean": "docker compose -f docker/docker-compose.yml down -v --rmi local"
+    "docker:clean": "docker compose -f docker/docker-compose.yml down -v --rmi local",
+    "validate": "node scripts/validate.mjs"
   },
   "dependencies": {},
   "peerDependencies": {

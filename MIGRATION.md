@@ -2,6 +2,36 @@
 
 ---
 
+## v0.9.x → v0.10.0
+
+**No breaking changes.** All v0.9.x code works without modification.
+
+### New features available (opt-in)
+
+| Feature | Import | Standalone |
+|---|---|---|
+| `healthCheck()` | `import { healthCheck } from 'shapeguard'` | Yes |
+| `gracefulShutdown()` | `import { gracefulShutdown } from 'shapeguard'` | Yes |
+| `defineRoute({ timeout })` | existing `defineRoute` | Yes |
+| `inMemoryDeduplicator()` | `import { inMemoryDeduplicator } from 'shapeguard'` | Yes |
+| `resetLoggerForTesting()` | `import { resetLoggerForTesting } from 'shapeguard'` | Yes |
+
+### Bug fixes that may affect existing code
+
+- **`res.created()` and `res.accepted()`** now respect `opts.status` override.
+  Previously, `res.created({ status: 200 })` still returned 201.
+  If you relied on this (unlikely), remove the explicit `status` override.
+
+- **`withShape('raw')`** now correctly reads the envelope data key from `response.shape` config.
+  If you combined `withShape('raw')` with a `response.shape` rename (e.g., `data → result`),
+  behaviour now matches documentation — it unwraps from the renamed key.
+
+- **`router.use()` subpath 405 tracking** — sub-routers mounted via `use()` are now tracked.
+  If you had routes that previously returned 404 on wrong-method requests, they now return 405.
+  This is the correct behaviour; update any tests that expected 404 on method mismatches.
+
+---
+
 ## v0.1.x → v0.2.0
 
 **No breaking changes.** All v0.1.x code works in v0.2.0 without modification.

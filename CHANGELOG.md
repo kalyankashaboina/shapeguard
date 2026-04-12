@@ -11,7 +11,41 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-> No unreleased changes.
+> All changes below are in the fixed codebase and will ship as **v0.10.0**.
+
+### New features
+
+- **`healthCheck()`** — parallel-check health endpoint builder. Each check times out independently. Built-in `healthCheck.memory()`, `healthCheck.env()`, `healthCheck.uptime()` factories. Returns 200 (healthy) or 503 (unhealthy) — Kubernetes-ready. Standalone, no `shapeguard()` required.
+- **`gracefulShutdown(server, opts)`** — SIGTERM/SIGINT drain + cleanup. Stops accepting new connections, waits for in-flight requests, runs `onShutdown` hook, then exits. Returns a deregistration function for test cleanup. Standalone.
+- **Per-route request timeout** — `defineRoute({ timeout: 5000 })` aborts the request with 408 if the handler does not respond within the given ms. Also configurable globally via `shapeguard({ timeout: 30_000 })`.
+- **GitHub webhook delivery deduplication** — `verifyWebhook({ provider: 'github', secret, dedup: inMemoryDeduplicator() })` prevents replay attacks for providers without timestamps. `inMemoryDeduplicator()` exported; Redis-compatible interface (`DeliveryDeduplicator`) also exported for multi-instance deployments.
+- **`resetLoggerForTesting()`** — exported from public API for clean logger state between test suites.
+- **`SG_LOGGER_KEY` and `SG_CONFIG_KEY`** — internal contract keys exported for authors of custom middleware that integrates with shapeguard.
+
+### Bug fixes
+
+- **`BUG-C1`**: Headers validation result was silently discarded — parsed value is now merged back into `req.headers` via `Object.assign`.
+- **`BUG-C2`**: README quickstart placed `notFoundHandler()` before routes — fixed, routes now mounted before error handlers in all examples.
+- **`BUG-M1`**: `withShape('raw')` hardcoded `'data'` key — now reads the configured key from `res.locals` so `response.shape` renames are respected.
+- **`BUG-M2`**: `allErrors: true` silently had no effect on Joi/Yup adapters — dev-time `console.warn` now emitted with exact fix instructions.
+- **`BUG-M4`**: Rate limit cleanup interval handle was discarded — now tracked; `.cleanup()` method attached to middleware for graceful shutdown.
+- **`BUG-L1/L2`**: `PROTO_POLLUTION` alignment fixed; `INVALID_JSON` and `REQUEST_TIMEOUT` added to `ErrorCode` enum.
+- **`res.created()` and `res.accepted()`** now respect `opts.status` override (previously hardcoded 201/202).
+- **`router.use()` subpath 405 tracking** — `createRouter()` now walks sub-router stacks to register their paths, so 405 detection works for mounted sub-routers.
+- **`operationId` collisions** in `generateOpenAPI()` — counter-based deduplication (`getUsers`, `getUsers2`...) prevents duplicate operationIds breaking Swagger codegen.
+
+### Architecture improvements
+
+- **`core/constants.ts`** — single source of truth for `SG_LOGGER_KEY` and `SG_CONFIG_KEY`. Eliminates magic string duplication and collision risk.
+- **`RouteDefinition` moved to `types/index.ts`** — `openapi/` no longer imports from `validation/`. Clean layer separation.
+- **`validate.ts` split** into focused sub-modules: `rate-limit.ts`, `cache-headers.ts`, `response-strip.ts`, `string-transforms.ts`. `validate.ts` is now a thin orchestrator (~200 lines, was 465).
+
+### Documentation
+
+- README rewritten — "replaces 9 packages" claim corrected to "eliminates boilerplate code". `healthCheck`, `gracefulShutdown`, timeout, and new security features documented.
+- `docs/VALIDATION.md` — headers section updated to accurately describe runtime `Object.assign` semantics.
+- `docs/RESPONSE.md` — `withShape('raw')` + `response.shape` interaction documented.
+- `docs/TESTING.md` — `mockResponse()` now includes `cursorPaginated`; `resetLoggerForTesting()` documented.
 
 ---
 

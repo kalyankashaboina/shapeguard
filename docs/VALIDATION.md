@@ -293,8 +293,15 @@ const UserHeadersSchema = z.object({
   'x-tenant-id':  z.string().uuid().optional(),
 })
 
-req.headers.authorization  // "Bearer eyJ..." — typed and validated ✅
+req.headers.authorization  // "Bearer eyJ..." — validated ✅, typed ✅
 ```
+
+> **Runtime note:** After `validate()` runs, the parsed fields are merged back into
+> `req.headers` via `Object.assign`. Express's `IncomingMessage.headers` does not
+> allow full reassignment, so existing header keys are updated in place and unknown
+> keys remain. Your Zod schema's `.strip()` removes unrecognised fields from the
+> parsed value but **does not delete them from `req.headers`** — Express adds its own
+> internal headers that you should not strip. Validate what you care about; ignore the rest.
 
 ### response — strips outgoing fields
 
@@ -586,6 +593,26 @@ The `retryAfter` field tells the client how many seconds until the window resets
 
 ---
 
+## Per-route timeout <a name="timeout"></a>
+
+Abort a request with 408 if the handler has not responded within a given time.
+Protects against slow handlers, hanging DB queries, and stuck external API calls.
+
+```ts
+defineRoute({
+  body:    CreateOrderDTO,
+  timeout: 10_000,   // 408 if handler takes > 10s
+})
+
+// Or globally for all routes:
+app.use(shapeguard({ timeout: 30_000 }))
+```
+
+The timeout fires only if `res.headersSent` is false — if the handler responds first,
+the timer is cleared immediately. Standalone: works without `shapeguard()` mounted.
+
+---
+
 ## Per-route cache hints — `cache` <a name="cache"></a>
 
 > Sets `Cache-Control` response header automatically
@@ -610,4 +637,4 @@ const GetPaymentRoute = defineRoute({
 })
 ```
 
-Cache headers are set **before** your handler runs — so even if the handler throws, the header is already set correctly.
+Cache headers are set **after successful validation** — if validation fails (422), cache headers are not set, so CDNs never cache error responses.
