@@ -13,7 +13,7 @@ function Hero() {
     <section className="hero-section">
       <div className="hero-eyebrow">
         <span>🚀</span>
-        <span>v0.9.0 — zero runtime dependencies</span>
+        <span>v0.10.0 — zero runtime dependencies</span>
       </div>
 
       <h1 className="hero-title">
@@ -56,9 +56,9 @@ function Hero() {
 function Stats() {
   const stats = [
     { value: '9 → 1',  label: 'Packages replaced' },
-    { value: '~12KB',  label: 'Minzipped (main)' },
+    { value: '~18KB',  label: 'Gzipped (main)' },
     { value: '0',      label: 'Runtime deps' },
-    { value: '90%+',   label: 'Test coverage' },
+    { value: '800+',   label: 'Tests passing' },
     { value: 'ESM+CJS',label: 'Module formats' },
   ]
   return (
@@ -150,10 +150,12 @@ const PACKAGES = [
   { pkg: 'http-errors',         replaced: 'AppError with typed factories' },
   { pkg: 'morgan',              replaced: 'shapeguard() built-in structured logging' },
   { pkg: 'express-rate-limit',  replaced: 'defineRoute({ rateLimit })' },
-  { pkg: 'swagger-ui-express',  replaced: 'serveScalar() / serveSwaggerUI() — CDN' },
+  { pkg: 'swagger-ui-express',  replaced: 'serveScalar() / serveSwaggerUI() / serveRedoc() — CDN' },
   { pkg: 'swagger-jsdoc',       replaced: 'generateOpenAPI() — from route definitions' },
   { pkg: 'uuid',                replaced: 'requestId built into shapeguard()' },
   { pkg: 'supertest mocks',     replaced: 'mockRequest / mockResponse / mockNext' },
+  { pkg: 'express-healthcheck', replaced: 'healthCheck() — parallel checks, k8s-ready' },
+  { pkg: 'http-graceful-shutdown', replaced: 'gracefulShutdown() — drain + cleanup + exit' },
 ]
 
 function PackagesReplaced() {
@@ -181,7 +183,7 @@ function PackagesReplaced() {
           </tbody>
         </table>
         <p className="pkg-total">
-          9 packages → 1 &nbsp;·&nbsp; Zero required runtime dependencies &nbsp;·&nbsp; ~12KB minzipped
+          9 packages → 1 &nbsp;·&nbsp; health check + graceful shutdown included &nbsp;·&nbsp; ~18KB gzipped
         </p>
       </div>
     </section>
@@ -218,6 +220,11 @@ const FEATURES = [
     desc:  'generateOpenAPI() reads your route definitions. Serve Scalar, Swagger UI, or Redoc — all CDN-loaded, zero install.',
   },
   {
+    icon: '📤',
+    title: 'Export to Postman, Insomnia, Bruno',
+    desc:  'toPostman(), toInsomnia(), toBruno() — export your full API spec to any HTTP client with a single function call.',
+  },
+  {
     icon: '🔗',
     title: 'Webhook verification',
     desc:  'Stripe, GitHub, Shopify, Svix, Twilio, or custom HMAC — one line, timingSafeEqual, replay attack protection.',
@@ -226,6 +233,21 @@ const FEATURES = [
     icon: '⚡',
     title: 'Rate limiting — no extra package',
     desc:  'Per-route rate limiting with a synchronous in-memory store. Pass a Redis store for distributed deployments.',
+  },
+  {
+    icon: '❤️',
+    title: 'Health check — k8s-ready',
+    desc:  'healthCheck() runs all checks in parallel with independent timeouts. Returns 200/503 — correct for liveness and readiness probes.',
+  },
+  {
+    icon: '🛑',
+    title: 'Graceful shutdown — production-safe',
+    desc:  'gracefulShutdown() handles SIGTERM and SIGINT: drains in-flight requests, runs cleanup hooks, then exits cleanly.',
+  },
+  {
+    icon: '⏱️',
+    title: 'Per-route request timeout',
+    desc:  'defineRoute({ timeout: 5000 }) aborts handlers that exceed the limit with a 408 — no more hanging requests.',
   },
   {
     icon: '🧪',
