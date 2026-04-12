@@ -98,6 +98,36 @@ export function createRouter(opts?: RouterOptions): Router {
         }
       }
 
+      // Intercept router.use(path, subRouter) — extract routes from sub-routers
+      // so that 405 detection works for paths mounted via use().
+      // Without this, DELETE /users returns 404 instead of 405 when only GET/POST
+      // are defined on a sub-router mounted at /users.
+      if (prop === 'use') {
+        return function(pathOrHandler: string | RequestHandler, ...handlers: RequestHandler[]) {
+          const mountPath = typeof pathOrHandler === 'string' ? pathOrHandler : ''
+          const actualHandlers = typeof pathOrHandler === 'string' ? handlers : [pathOrHandler, ...handlers]
+
+          // For each handler that looks like an Express Router, walk its stack
+          for (const handler of actualHandlers) {
+            if (handler && typeof handler === 'function' && 'stack' in handler) {
+              const subStack = (handler as unknown as { stack: Array<{ route?: { path: string; methods: Record<string, boolean> } }> }).stack
+              if (Array.isArray(subStack)) {
+                for (const layer of subStack) {
+                  if (layer.route?.path && layer.route.methods) {
+                    const fullPath = normalizePath(mountPath + layer.route.path)
+                    for (const method of Object.keys(layer.route.methods)) {
+                      if (layer.route.methods[method]) track(fullPath, method)
+                    }
+                  }
+                }
+              }
+            }
+          }
+
+          return (target.use as Function)(pathOrHandler, ...handlers)
+        }
+      }
+
       // Intercept router.route(path) — returns a chainable object whose
       // HTTP verb methods must also be tracked for 405 to work correctly.
       if (prop === 'route') {

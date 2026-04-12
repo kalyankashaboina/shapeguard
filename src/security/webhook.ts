@@ -15,6 +15,38 @@ import type { Request, Response, NextFunction, RequestHandler } from 'express'
 import { AppError } from '../errors/AppError.js'
 
 type BuiltinProvider = 'stripe' | 'github' | 'shopify' | 'twilio' | 'svix'
+// Delivery-ID deduplication store — for providers that don't use timestamps (e.g. GitHub).
+// Pluggable so users can back it with Redis for multi-instance deployments.
+export interface DeliveryDeduplicator {
+  /** Returns true if this delivery ID has been seen before */
+  has(id: string): boolean | Promise<boolean>
+  /** Record this delivery ID as seen (with optional TTL in seconds) */
+  add(id: string, ttlSecs?: number): void | Promise<void>
+}
+
+/** Simple in-memory deduplicator — suitable for single-process deployments */
+export function inMemoryDeduplicator(maxSize = 10_000): DeliveryDeduplicator {
+  const seen = new Map<string, number>()  // id → expiry timestamp (ms)
+  return {
+    has(id: string): boolean {
+      const expiry = seen.get(id)
+      if (expiry === undefined) return false
+      if (Date.now() > expiry) { seen.delete(id); return false }
+      return true
+    },
+    add(id: string, ttlSecs = 3600): void {
+      // Evict oldest entries when map grows too large
+      if (seen.size >= maxSize) {
+        const now = Date.now()
+        for (const [k, exp] of seen) {
+          if (now > exp) seen.delete(k)
+          if (seen.size < maxSize) break
+        }
+      }
+      seen.set(id, Date.now() + ttlSecs * 1000)
+    },
+  }
+}
 
 interface ProviderPreset {
   algorithm:        string
@@ -25,6 +57,8 @@ interface ProviderPreset {
   separateTimestampHeader?: boolean
   payloadTemplate?: (body: string, ts: string) => string
   toleranceSecs?:   number
+  /** Header containing a unique delivery ID for deduplication (e.g. GitHub) */
+  deliveryHeader?:  string
 }
 
 const PRESETS: Record<BuiltinProvider, ProviderPreset> = {
@@ -38,10 +72,13 @@ const PRESETS: Record<BuiltinProvider, ProviderPreset> = {
     toleranceSecs:   300,
   },
   github: {
-    algorithm:  'sha256',
-    headerName: 'x-hub-signature-256',
-    prefix:     'sha256=',
-    encoding:   'hex',
+    algorithm:       'sha256',
+    headerName:      'x-hub-signature-256',
+    prefix:          'sha256=',
+    encoding:        'hex',
+    // GitHub sends x-github-delivery — a UUID per delivery.
+    // No timestamp → replay prevention via delivery-ID deduplication instead.
+    deliveryHeader:  'x-github-delivery',
   },
   shopify: {
     algorithm:  'sha256',
@@ -73,6 +110,20 @@ export interface WebhookConfig {
   prefix?:         string
   encoding?:       'hex' | 'base64'
   toleranceSecs?:  number
+  /**
+   * Delivery-ID deduplication — prevents replay attacks for providers
+   * that don't use timestamps (GitHub sends x-github-delivery UUID).
+   * Pass inMemoryDeduplicator() for single-process, or a Redis-backed
+   * implementation for multi-instance deployments.
+   *
+   * @example
+   * import { verifyWebhook, inMemoryDeduplicator } from 'shapeguard'
+   * const dedup = inMemoryDeduplicator()
+   * app.post('/wh/github', express.raw({ type: 'application/json' }),
+   *   verifyWebhook({ provider: 'github', secret, dedup }),
+   *   handler)
+   */
+  dedup?:          DeliveryDeduplicator
   onSuccess?:      (req: Request) => void | Promise<void>
   onFailure?:      (req: Request, reason: string) => void | Promise<void>
 }
@@ -164,6 +215,25 @@ export function verifyWebhook(config: WebhookConfig): RequestHandler {
         await config.onFailure?.(req, 'HMAC mismatch')
         throw AppError.custom('WEBHOOK_SIGNATURE_INVALID',
           'Webhook signature verification failed — payload may have been tampered with', 401)
+      }
+
+      // Delivery-ID deduplication — check AFTER signature passes to avoid
+      // enumeration attacks (attacker can't learn valid delivery IDs via errors).
+      if (config.dedup) {
+        const deliveryHeader = (preset as unknown as { deliveryHeader?: string } | undefined)?.deliveryHeader
+        const deliveryId     = deliveryHeader ? (req.headers[deliveryHeader] as string | undefined) : undefined
+        if (deliveryId) {
+          const alreadySeen = await Promise.resolve(config.dedup.has(deliveryId))
+          if (alreadySeen) {
+            await config.onFailure?.(req, `Duplicate delivery ID: ${deliveryId}`)
+            throw AppError.custom(
+              'WEBHOOK_DELIVERY_DUPLICATE',
+              'Webhook delivery already processed — possible replay attack',
+              400,
+            )
+          }
+          await Promise.resolve(config.dedup.add(deliveryId))
+        }
       }
 
       await config.onSuccess?.(req)

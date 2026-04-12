@@ -25,7 +25,7 @@
 // ─────────────────────────────────────────────
 
 import type { RequestHandler }  from 'express'
-import type { RouteDefinition } from '../validation/define-route.js'
+import type { RouteDefinition } from '../types/index.js'
 
 // ── Security scheme definitions ───────────────────────────────────────────────
 
@@ -161,6 +161,7 @@ export function generateOpenAPI(config: OpenAPIConfig): OpenAPISpec {
   const paths:       Record<string, Record<string, OpenAPIOperation>> = {}
   const prefix       = config.prefix ? normalizePath(config.prefix) : ''
   const seen         = new Set<string>()
+  const opIdCounts   = new Map<string, number>()  // dedup counter for operationId generation
   const hasSecurity  = config.security && Object.keys(config.security).length > 0
 
   for (const [routeKey, route] of Object.entries(config.routes)) {
@@ -193,7 +194,7 @@ export function generateOpenAPI(config: OpenAPIConfig): OpenAPISpec {
     const hasRateLimit = 'rateLimit' in r && r['rateLimit'] != null
 
     const operation: OpenAPIOperation = {
-      operationId: generateOperationId(method, normalRaw),
+      operationId: generateOperationId(method, normalRaw, opIdCounts),
       responses: {
         '400': { description: 'Bad request — pre-parse guard failure (repeated param, body too deep, string too long, invalid content-type)',
                  content: { 'application/json': { schema: ERROR_ENVELOPE } } },
@@ -592,12 +593,22 @@ function normalizePath(path: string): string {
 }
 
 // ── operationId ───────────────────────────────────────────────────────────────
+// Counter map is local to generateOpenAPI() call — each spec generation gets
+// its own dedup scope (no cross-call leakage). Passed in from generateOpenAPI().
 
-function generateOperationId(method: string, path: string): string {
+function generateOperationId(
+  method: string,
+  path: string,
+  seen: Map<string, number>,
+): string {
   const segments = path.split('/').filter(Boolean)
     .map(s => s.startsWith(':') ? s.slice(1) : s)
     .map(s => s.charAt(0).toUpperCase() + s.slice(1))
-  return method.toLowerCase() + (segments.join('') || 'Root')
+  const base = method.toLowerCase() + (segments.join('') || 'Root')
+  const count = (seen.get(base) ?? 0) + 1
+  seen.set(base, count)
+  // First occurrence: use base name. Subsequent: append counter (getUsers2, getUsers3...)
+  return count === 1 ? base : `${base}${count}`
 }
 
 // ── Zod introspection ─────────────────────────────────────────────────────────

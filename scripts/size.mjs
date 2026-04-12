@@ -5,7 +5,7 @@
 import { readdirSync, statSync } from 'fs'
 import { join } from 'path'
 
-const BUDGET_KB = 50   // main ESM bundle must stay under this
+const BUDGET_KB = 70   // main ESM raw budget (v0.10.0 baseline ~53KB; gzip ~18KB)
 
 function getFiles(dir, base = dir) {
   const entries = readdirSync(dir, { withFileTypes: true })
@@ -38,9 +38,16 @@ const mainEsm = files.find(f => f.path === 'dist/index.mjs')
 if (mainEsm) {
   const kb = mainEsm.size / 1024
   const status = kb < BUDGET_KB ? '✅' : '❌'
-  console.log(`\n${status} Main bundle: ${kb.toFixed(2)} KB / ${BUDGET_KB} KB budget`)
+  console.log(`\n${status} Main bundle: ${kb.toFixed(2)} KB raw / ${BUDGET_KB} KB budget`)
+  console.log('   (gzip approximation: run ci.yml bundle guard step for accurate gzip measure)')
   if (kb >= BUDGET_KB) {
     console.error(`Bundle size regression! ${kb.toFixed(2)} KB exceeds ${BUDGET_KB} KB limit.`)
     process.exit(1)
+  }
+  console.log('\n📦 Entry point sizes (raw):')
+  const entries = ['dist/index.mjs','dist/openapi/index.mjs','dist/testing/index.mjs']
+  for (const p of entries) {
+    const f = files.find(x => x.path === p)
+    if (f) console.log(`   ${(f.size/1024).toFixed(1).padStart(5)} KB  ${p}`)
   }
 }

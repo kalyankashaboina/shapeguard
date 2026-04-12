@@ -376,6 +376,13 @@ router.get('/ping',
 )
 ```
 
+> **`response.shape` interaction:** If you have configured a global `response.shape`
+> that renames the `data` key (e.g. `{ result: '{data}' }`), `withShape('raw')`
+> correctly reads from the renamed key and unwraps it. No extra config needed —
+> it reads the active shape config from the request context automatically.
+> This applies only to `withShape('raw')`; map mode (`withShape({ ... })`) always
+> resolves tokens against whatever the response envelope actually contains.
+
 ### Legacy API shape
 
 ```ts

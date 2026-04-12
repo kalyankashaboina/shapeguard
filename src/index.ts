@@ -8,7 +8,7 @@ export { shapeguard }           from './shapeguard.js'
 
 // ── Logger singleton — use anywhere in your app ──
 // Same instance used by shapeguard() middleware. Auto-selects pino → winston → fallback.
-export { logger, configureLogger } from './logging/singleton.js'
+export { logger, configureLogger, _resetLogger as resetLoggerForTesting } from './logging/singleton.js'
 
 // ── Validation ────────────────────────────────
 export { validate }             from './validation/validate.js'
@@ -35,8 +35,8 @@ export type { ScalarOptions, SwaggerUIOptions, RedocOptions, ServeDocsOptions } 
 // toPostman: Postman Collection v2.1 · toInsomnia: Insomnia v4 · toBruno: Bruno
 export { toPostman, toInsomnia, toBruno } from './openapi/index.js'
 
-export { verifyWebhook } from './security/webhook.js'
-export type { WebhookConfig } from './security/webhook.js'
+export { verifyWebhook, inMemoryDeduplicator } from './security/webhook.js'
+export type { WebhookConfig, DeliveryDeduplicator } from './security/webhook.js'
 
 // ── Zod adapter (first-class) ─────────────────
 export { zodAdapter, isZodSchema } from './adapters/zod.js'
@@ -97,3 +97,13 @@ export type {
 
 // ── Error codes — stable string constants ─────
 export { ErrorCode } from './types/index.js'
+
+// ── Internal contract keys — useful for custom middleware that integrates with shapeguard ──
+export { SG_LOGGER_KEY, SG_CONFIG_KEY } from './core/constants.js'
+
+// ── Resilience + production utilities ─────────────────────────────────────────
+export { gracefulShutdown } from './core/graceful-shutdown.js'
+export type { GracefulShutdownOptions } from './core/graceful-shutdown.js'
+
+export { healthCheck } from './core/health-check.js'
+export type { HealthCheckOptions, HealthCheckResponse, CheckResult } from './core/health-check.js'

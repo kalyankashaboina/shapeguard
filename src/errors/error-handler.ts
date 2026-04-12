@@ -7,6 +7,7 @@ import type { Request, Response, NextFunction, ErrorRequestHandler } from 'expre
 import type { ErrorsConfig, ResponseConfig, Logger } from '../types/index.js'
 import { ErrorCode } from '../types/index.js'
 import { AppError, isAppError } from './AppError.js'
+import { SG_LOGGER_KEY } from '../core/constants.js'
 import { buildError } from '../core/response.js'
 import { isDev } from '../core/env.js'
 
@@ -29,10 +30,10 @@ export function errorHandler(opts: ErrorHandlerOptions = {}): ErrorRequestHandle
 
     // BUG #5 FIX: auto-discover shapeguard's logger from app.locals when no
     // explicit logger was passed. shapeguard() stores its logger instance on
-    // req.app.locals['__sg_logger__'] so errorHandler() picks it up automatically.
+    // req.app.locals[SG_LOGGER_KEY] so errorHandler() picks it up automatically.
     // Explicit logger option still takes precedence — zero breaking changes.
     // Guard req.app existence for standalone / test usage where app is not attached.
-    const activeLogger = logger ?? (req.app?.locals as Record<string, unknown> | undefined)?.['__sg_logger__'] as typeof logger | undefined
+    const activeLogger = logger ?? (req.app?.locals as Record<string, unknown> | undefined)?.[SG_LOGGER_KEY] as typeof logger | undefined
 
     if (activeLogger) {
       const payload: Record<string, unknown> = {

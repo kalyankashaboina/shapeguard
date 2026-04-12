@@ -5,7 +5,7 @@
 // For Joi/Yup, pass the adapter directly.
 // ─────────────────────────────────────────────
 
-import type { RouteSchema, SchemaAdapter, ZodLike } from '../types/index.js'
+import type { RouteSchema, RouteDefinition, SchemaAdapter, ZodLike } from '../types/index.js'
 import { zodAdapter, isZodSchema }                   from '../adapters/zod.js'
 
 type SchemaInput = SchemaAdapter | ZodLike
@@ -70,9 +70,19 @@ export interface DefineRouteInput {
    * defineRoute({ cache: { noStore: true } })
    */
   cache?: { noStore: true; maxAge?: number; private?: boolean } | { maxAge: number; private?: boolean; noStore?: boolean; sMaxAge?: number; staleWhileRevalidate?: number }
+
+  /**
+   * Per-route request timeout in milliseconds.
+   * If the handler has not responded within this time, shapeguard sends a 408.
+   * @example defineRoute({ body: CreateUserDTO, timeout: 5000 })
+   */
+  timeout?: number
 }
 
-export interface RouteDefinition extends RouteSchema {
+// RouteDefinition is defined in types/index.ts and re-exported here for backwards compatibility
+export type { RouteDefinition } from '../types/index.js'
+// @deprecated local definition kept for reference only — do not use directly
+interface _RouteDefinitionLocal extends RouteSchema {
   transform?: (data: unknown) => Promise<unknown> | unknown
   rateLimit?: {
     windowMs:      number
@@ -94,6 +104,7 @@ export function defineRoute(input: DefineRouteInput): RouteDefinition {
   if (input.transform) schema.transform = input.transform
   if (input.rateLimit) schema.rateLimit = input.rateLimit
   if (input.cache)     schema.cache     = input.cache
+  if (input.timeout)   schema.timeout   = input.timeout
   return schema
 }
 

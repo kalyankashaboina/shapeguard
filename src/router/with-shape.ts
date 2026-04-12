@@ -6,9 +6,23 @@
 
 import type { Request, Response, NextFunction, RequestHandler } from 'express'
 import { isDev } from '../core/env.js'
+import { VALIDATION_CONFIG_KEY } from '../validation/validate.js'
 
 type ShapeMap = Record<string, string>  // { ok: '{data.ok}', uptime: '{data.uptime}' }
 type ShapeMode = ShapeMap | 'raw'
+
+// Resolve the configured data key name from res.locals config (mirrors getDataKey in validate.ts).
+// Falls back to 'data' when no shape config is present.
+function resolveDataKey(res: Response): string {
+  const stored = (res.locals as Record<string, unknown> | undefined)?.[VALIDATION_CONFIG_KEY] as
+    | { response?: { shape?: Record<string, string> } } | undefined
+  const shape = stored?.response?.shape
+  if (!shape) return 'data'
+  for (const [newKey, token] of Object.entries(shape)) {
+    if (token === '{data}') return newKey
+  }
+  return 'data'
+}
 
 export function withShape(shape: ShapeMode): RequestHandler {
   return function withShapeMiddleware(
@@ -20,13 +34,16 @@ export function withShape(shape: ShapeMode): RequestHandler {
 
     res.json = function shapedJson(body: unknown) {
       if (shape === 'raw') {
-        // Raw mode — if body is our envelope, unwrap data
+        // BUG-M1 FIX: read the configured data key from res.locals instead of
+        // hardcoding 'data'. When response.shape renames data → result, raw mode
+        // must unwrap from 'result', not 'data'.
+        const dataKey = resolveDataKey(res)
         if (
           body !== null &&
           typeof body === 'object' &&
-          'data' in (body as object)
+          dataKey in (body as object)
         ) {
-          originalJson((body as Record<string, unknown>)['data'])
+          originalJson((body as Record<string, unknown>)[dataKey])
         } else {
           originalJson(body)
         }

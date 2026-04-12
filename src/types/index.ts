@@ -155,6 +155,13 @@ export interface RequestIdConfig {
 // ── shapeguard() master config ────────────────
 export interface ShapeguardConfig {
   debug?:      boolean
+  /**
+   * Global request timeout in milliseconds applied to ALL routes.
+   * Per-route timeout in defineRoute({ timeout }) takes precedence.
+   * Default: no timeout.
+   * @example timeout: 30_000  // 30 seconds
+   */
+  timeout?:    number
   requestId?:  RequestIdConfig
   logger?:     LoggerConfig
   validation?: ValidationConfig
@@ -271,6 +278,30 @@ export interface ErrorsConfig {
   onError?: (err: unknown, req: Request) => void
 }
 
+
+// ── RouteDefinition — the combined schema + options object for a route ────────
+// Defined here (not in validation/) so openapi/ can import it without
+// creating a cross-layer validation → openapi dependency.
+export interface RouteDefinition extends RouteSchema {
+  /** Per-route request timeout in ms. Handler must respond within this time or a 408 is returned. */
+  timeout?:   number
+  transform?: (data: unknown) => Promise<unknown> | unknown
+  rateLimit?: {
+    windowMs:      number
+    max:           number
+    message?:      string
+    store?:        { get(k: string): Promise<{ count: number; reset: number } | null>; set(k: string, v: { count: number; reset: number }): Promise<void> }
+    keyGenerator?: (req: Request) => string
+  }
+  cache?: { noStore: true; maxAge?: number; private?: boolean } | { maxAge: number; private?: boolean; noStore?: boolean; sMaxAge?: number; staleWhileRevalidate?: number }
+  // OpenAPI metadata — optional, used by generateOpenAPI()
+  summary?:     string
+  description?: string
+  tags?:        string[]
+  security?:    string[] | null
+  deprecated?:  boolean
+}
+
 // ── Logger interface ──────────────────────────
 export interface Logger {
   info:  (obj: object, msg?: string) => void
@@ -294,9 +325,11 @@ export const ErrorCode = {
   BODY_ARRAY_TOO_LARGE: 'BODY_ARRAY_TOO_LARGE',
   STRING_TOO_LONG:      'STRING_TOO_LONG',
   INVALID_CONTENT_TYPE: 'INVALID_CONTENT_TYPE',
+  INVALID_JSON:         'INVALID_JSON',          // BUG-L2 FIX: was used in pre-parse.ts but missing from enum
   PARAM_POLLUTION:      'PARAM_POLLUTION',
-  PROTO_POLLUTION:       'PROTO_POLLUTION',
-  RATE_LIMIT_EXCEEDED:   'RATE_LIMIT_EXCEEDED',
+  PROTO_POLLUTION:      'PROTO_POLLUTION',        // BUG-L1 FIX: removed extra whitespace
+  RATE_LIMIT_EXCEEDED:  'RATE_LIMIT_EXCEEDED',
+  REQUEST_TIMEOUT:      'REQUEST_TIMEOUT',
 } as const
 
 export type ErrorCode = typeof ErrorCode[keyof typeof ErrorCode]

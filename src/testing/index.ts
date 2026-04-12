@@ -6,7 +6,7 @@
 // ─────────────────────────────────────────────
 
 import type { Request, Response, NextFunction } from 'express'
-import type { ResOkOpts, ResFailOpts, ResPaginatedOpts } from '../types/index.js'
+import type { ResOkOpts, ResFailOpts, ResPaginatedOpts, ResCursorPaginatedOpts, ResponseConfig } from '../types/index.js'
 import { buildSuccess, buildPaginated, buildError } from '../core/response.js'
 
 // ── MockRequest ───────────────────────────────
@@ -74,13 +74,20 @@ export interface MockResponse extends Response {
  * Creates a mock Express Response for unit testing controllers.
  * Captures status, body, headers — no HTTP needed.
  *
+ * All shapeguard res helpers (ok, created, accepted, noContent, paginated,
+ * cursorPaginated, fail) are available out of the box — no middleware required.
+ *
+ * Pass a ResponseConfig to test custom envelope shapes:
+ *   mockResponse({ shape: { result: '{data}' } })
+ *
  * @example
+ * const req = mockRequest({ body: { email: 'alice@example.com' } })
  * const res = mockResponse()
- * res.ok({ data: { id: '1' }, message: 'found' })
- * expect(res._result().statusCode).toBe(200)
+ * await createUser[1](req, res, mockNext())
+ * expect(res._result().statusCode).toBe(201)
  * expect(res._result().body).toMatchObject({ success: true })
  */
-export function mockResponse(): MockResponse {
+export function mockResponse(config: ResponseConfig = {}): MockResponse {
   const state: MockState = {
     statusCode:  200,
     body:        undefined,
@@ -134,24 +141,27 @@ export function mockResponse(): MockResponse {
     },
 
     // ── shapeguard res helpers ────────────────
+    // DOC-D2 FIX: all helpers now pass the ResponseConfig so custom envelope
+    // shapes (response.shape) work correctly in tests, matching production behaviour.
+    // cursorPaginated added — was missing from the original mockResponse.
     ok(opts: ResOkOpts): void {
       if (isSent()) return
       setStatus(opts.status ?? 200)
-      state.body = buildSuccess(opts.data ?? null, opts.message ?? '')
+      state.body = buildSuccess(opts.data ?? null, opts.message ?? '', config)
       markSent()
     },
 
     created(opts: ResOkOpts): void {
       if (isSent()) return
       setStatus(201)
-      state.body = buildSuccess(opts.data ?? null, opts.message ?? '')
+      state.body = buildSuccess(opts.data ?? null, opts.message ?? '', config)
       markSent()
     },
 
     accepted(opts: ResOkOpts): void {
       if (isSent()) return
       setStatus(202)
-      state.body = buildSuccess(opts.data ?? null, opts.message ?? '')
+      state.body = buildSuccess(opts.data ?? null, opts.message ?? '', config)
       markSent()
     },
 
@@ -165,14 +175,28 @@ export function mockResponse(): MockResponse {
     paginated(opts: ResPaginatedOpts): void {
       if (isSent()) return
       setStatus(200)
-      state.body = buildPaginated(opts.data, opts.total, opts.page, opts.limit, opts.message ?? '')
+      state.body = buildPaginated(opts.data, opts.total, opts.page, opts.limit, opts.message ?? '', config)
+      markSent()
+    },
+
+    cursorPaginated(opts: ResCursorPaginatedOpts): void {
+      if (isSent()) return
+      setStatus(200)
+      const payload = {
+        items:      opts.data,
+        nextCursor: opts.nextCursor,
+        prevCursor: opts.prevCursor ?? null,
+        hasMore:    opts.hasMore,
+        ...(opts.total !== undefined && { total: opts.total }),
+      }
+      state.body = buildSuccess(payload, opts.message ?? '', config)
       markSent()
     },
 
     fail(opts: ResFailOpts): void {
       if (isSent()) return
       setStatus(opts.status ?? 400)
-      state.body = buildError(opts.code, opts.message, (opts.details as never) ?? null, false)
+      state.body = buildError(opts.code, opts.message, (opts.details as never) ?? null, false, config)
       markSent()
     },
 
