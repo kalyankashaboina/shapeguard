@@ -27,6 +27,19 @@ export interface HealthCheckOptions {
   checks: Record<string, () => Promise<unknown> | unknown>
 
   /**
+   * Names of checks that are non-critical.
+   * If a non-critical check fails, status becomes `degraded` (not `unhealthy`).
+   * Useful for k8s: liveness probe returns 200, readiness probe returns 503 for `unhealthy` only.
+   *
+   * @example
+   * healthCheck({
+   *   checks: { db: dbCheck, cache: cacheCheck },
+   *   nonCritical: ['cache'], // cache failure → degraded, not unhealthy
+   * })
+   */
+  nonCritical?: string[]
+
+  /**
    * Per-check timeout in ms. Default: 5_000 (5 seconds).
    * Each check times out independently — one slow check doesn't block the others.
    */
@@ -38,7 +51,13 @@ export interface HealthCheckOptions {
   healthyStatus?: number
 
   /**
-   * HTTP status code when any check fails. Default: 503.
+   * HTTP status code when a non-critical check fails (degraded). Default: 200.
+   * Degraded means the service is up but not fully healthy.
+   */
+  degradedStatus?: number
+
+  /**
+   * HTTP status code when any critical check fails. Default: 503.
    * 503 is correct — load balancers and k8s use it to detect unhealthy pods.
    */
   unhealthyStatus?: number
@@ -81,10 +100,14 @@ async function runCheck(
 export function healthCheck(options: HealthCheckOptions): RequestHandler {
   const {
     checks,
+    nonCritical    = [],
     timeout        = 5_000,
     healthyStatus  = 200,
+    degradedStatus  = 200,
     unhealthyStatus = 503,
   } = options
+
+  const nonCriticalSet = new Set(nonCritical)
 
   return async function healthCheckHandler(_req: Request, res: Response): Promise<void> {
     // Run all checks in parallel — each times out independently
@@ -94,13 +117,29 @@ export function healthCheck(options: HealthCheckOptions): RequestHandler {
     )
 
     const checkResults: Record<string, CheckResult> = {}
-    let allHealthy = true
+    let criticalFailed  = false
+    let nonCriticalFailed = false
+
     entries.forEach(([name], i) => {
       checkResults[name] = results[i]!
-      if (results[i] !== 'ok') allHealthy = false
+      if (results[i] !== 'ok') {
+        if (nonCriticalSet.has(name)) {
+          nonCriticalFailed = true
+        } else {
+          criticalFailed = true
+        }
+      }
     })
 
-    const status: HealthCheckResponse['status'] = allHealthy ? 'healthy' : 'unhealthy'
+    const status: HealthCheckResponse['status'] =
+      criticalFailed    ? 'unhealthy' :
+      nonCriticalFailed ? 'degraded'  :
+                          'healthy'
+
+    const httpStatus =
+      criticalFailed    ? unhealthyStatus :
+      nonCriticalFailed ? degradedStatus  :
+                          healthyStatus
 
     const body: HealthCheckResponse = {
       status,
@@ -110,7 +149,7 @@ export function healthCheck(options: HealthCheckOptions): RequestHandler {
       time:    new Date().toISOString(),
     }
 
-    res.status(allHealthy ? healthyStatus : unhealthyStatus).json(body)
+    res.status(httpStatus).json(body)
   }
 }
 

@@ -1,5 +1,5 @@
 // ─────────────────────────────────────────────
-// openapi/index.ts — shapeguard v0.8.0
+// openapi/index.ts — shapeguard
 // Enterprise-grade OpenAPI 3.1 + Swagger UI.
 //
 // createDocs() — self-hosted Swagger UI:

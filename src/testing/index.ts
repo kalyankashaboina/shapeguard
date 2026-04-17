@@ -32,6 +32,8 @@ export interface MockRequestOptions {
 export function mockRequest(opts: MockRequestOptions = {}): Request {
   const ip      = opts.headers?.['x-forwarded-for'] ?? '127.0.0.1'
   const headers = opts.headers ?? {}
+  // app is included so error-handler code that accesses req.app.locals doesn't throw.
+  const appLocals: Record<string, unknown> = {}
   return {
     body:    opts.body    ?? {},
     params:  opts.params  ?? {},
@@ -43,6 +45,7 @@ export function mockRequest(opts: MockRequestOptions = {}): Request {
     route:   { path: opts.path ?? '/' },
     ip,
     socket:  { remoteAddress: ip },
+    app:     { locals: appLocals, settings: {} },
     get(name: string): string | undefined {
       return (headers as Record<string, string>)[name.toLowerCase()]
     },

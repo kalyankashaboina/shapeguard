@@ -13,8 +13,8 @@ export { logger, configureLogger, _resetLogger as resetLoggerForTesting } from '
 // ── Validation ────────────────────────────────
 export { validate }             from './validation/validate.js'
 export type { ValidateOptions } from './validation/validate.js'
-export { defineRoute }          from './validation/define-route.js'
-export type { RouteDefinition } from './validation/define-route.js'
+export { defineRoute, mergeRoutes } from './validation/define-route.js'
+export type { RouteDefinition }     from './validation/define-route.js'
 export { handle }               from './validation/handle.js'
 export { createDTO }            from './validation/create-dto.js'
 export type { DTOResult }       from './validation/create-dto.js'
@@ -38,6 +38,9 @@ export { toPostman, toInsomnia, toBruno } from './openapi/index.js'
 export { verifyWebhook, inMemoryDeduplicator } from './security/webhook.js'
 export type { WebhookConfig, DeliveryDeduplicator } from './security/webhook.js'
 
+export { safeJsonParse } from './core/pre-parse.js'
+export { validateResponse, checkResponse } from './validation/validate-response.js'
+
 // ── Zod adapter (first-class) ─────────────────
 export { zodAdapter, isZodSchema } from './adapters/zod.js'
 
@@ -59,6 +62,7 @@ export type {
   ValidationConfig,
   ResponseConfig,
   ErrorsConfig,
+  ErrorContext,
 
   // Schema
   SchemaAdapter,
@@ -89,6 +93,7 @@ export type {
   // Logger
   Logger,
   LogLevel,
+  RequestLogContext,
 
   // Utils
   HttpMethod,
@@ -107,3 +112,23 @@ export type { GracefulShutdownOptions } from './core/graceful-shutdown.js'
 
 export { healthCheck } from './core/health-check.js'
 export type { HealthCheckOptions, HealthCheckResponse, CheckResult } from './core/health-check.js'
+
+export { getRequestHeaders } from './core/request-id.js'
+
+// ── Composable middleware ─────────────────────
+export { pipe } from './core/pipe.js'
+
+// ── Typed per-request context store ──────────
+export { setContext, getContext, requireContext, getFullContext, contextMiddleware } from './core/context.js'
+
+// ── Server-Sent Events (SSE) ──────────────────
+export { sseStream, enableSSE, onClientDisconnect } from './core/sse.js'
+export type { SSEEvent, SSEStream } from './core/sse.js'
+
+// ── Circuit breaker ───────────────────────────
+export { circuitBreaker, CircuitOpenError } from './core/circuit-breaker.js'
+export type { CircuitBreaker, CircuitBreakerOptions, CircuitState } from './core/circuit-breaker.js'
+
+// ── Route groups ──────────────────────────────
+export { defineGroup } from './router/define-group.js'
+export type { RouteGroupOptions } from './router/define-group.js'

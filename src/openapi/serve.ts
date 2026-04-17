@@ -41,15 +41,66 @@ function safeJson(o: unknown): string {
   return JSON.stringify(o).replace(/<\//g, '<\\/')
 }
 
-function htmlHandler(html: string): RequestHandler {
+
+// ── CSP strings per UI ───────────────────────────────────────────────────────
+// Each doc UI loads scripts from a different CDN. CSP is tight: only the exact
+// origin needed for that UI is whitelisted. 'unsafe-inline' is required because
+// Scalar / Swagger embed configuration via inline <script> blocks.
+const CSP_SCALAR  = [
+  "default-src 'none'",
+  "script-src  'unsafe-inline' https://cdn.jsdelivr.net",
+  "style-src   'unsafe-inline'",
+  "img-src     'self' data: https:",
+  "font-src    'self' data:",
+  "connect-src 'self' https:",
+].join('; ')
+
+const CSP_SWAGGER = [
+  "default-src 'none'",
+  "script-src  'unsafe-inline' https://unpkg.com",
+  "style-src   'unsafe-inline' https://unpkg.com",
+  "img-src     'self' data: https:",
+  "font-src    'self' data: https://unpkg.com",
+  "connect-src 'self' https:",
+].join('; ')
+
+const CSP_REDOC   = [
+  "default-src 'none'",
+  "script-src  'unsafe-inline' https://cdn.jsdelivr.net",
+  "style-src   'unsafe-inline'",
+  "img-src     'self' data: https:",
+  "font-src    'self' data: https://fonts.gstatic.com",
+  "connect-src 'self' https:",
+  "worker-src  blob:",
+].join('; ')
+
+function htmlHandler(html: string, csp?: string): RequestHandler {
   return (_req: Request, res: Response) => {
     res.setHeader('Content-Type', 'text/html; charset=utf-8')
     res.setHeader('X-Content-Type-Options', 'nosniff')
     res.setHeader('X-Frame-Options', 'SAMEORIGIN')
     res.setHeader('Referrer-Policy', 'no-referrer')
+    res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()')
+    if (csp) res.setHeader('Content-Security-Policy', csp)
     res.send(html)
   }
 }
+
+
+// ── Pinned CDN versions ───────────────────────────────────────────────────────
+// Pin to specific versions so deployments are reproducible.
+// When upgrading: update version + recompute SRI hash with:
+//   curl -s <url> | openssl dgst -sha384 -binary | openssl base64 -A | sed 's/^/sha384-/'
+const CDN_SCALAR_VERSION   = '1.52.1'
+const CDN_SWAGGER_VERSION  = '5.32.2'
+const CDN_REDOC_VERSION    = '2.5.2'
+
+const CDN_SCALAR_URL   = `https://cdn.jsdelivr.net/npm/@scalar/api-reference@${CDN_SCALAR_VERSION}/dist/browser/standalone.js`
+const CDN_SWAGGER_CSS  = `https://unpkg.com/swagger-ui-dist@${CDN_SWAGGER_VERSION}/swagger-ui.css`
+const CDN_SWAGGER_JS   = `https://unpkg.com/swagger-ui-dist@${CDN_SWAGGER_VERSION}/swagger-ui-bundle.js`
+const CDN_SWAGGER_PRE  = `https://unpkg.com/swagger-ui-dist@${CDN_SWAGGER_VERSION}/swagger-ui-standalone-preset.js`
+const CDN_SWAGGER_SNIP = `https://unpkg.com/swagger-ui-request-snippets/dist/swagger-ui-request-snippets.js`
+const CDN_REDOC_URL    = `https://cdn.jsdelivr.net/npm/redoc@${CDN_REDOC_VERSION}/bundles/redoc.standalone.js`
 
 // ── serveScalar ───────────────────────────────────────────────────────────────
 
@@ -60,8 +111,18 @@ export interface ScalarOptions {
   theme?:    'light' | 'dark' | 'auto'
   /** URL to favicon */
   favicon?:  string
-  /** Custom CSS overrides */
+  /**
+   * Raw CSS injected into <style> in <head>. Developer-only config.
+   * Never populate this from user-controlled input — it is not sanitised.
+   */
   customCss?: string
+  /**
+   * Subresource Integrity (SRI) hash for the Scalar script tag.
+   * Prevents loading if the CDN file is tampered with.
+   * Compute with: curl -s <url> | openssl dgst -sha384 -binary | openssl base64 -A | sed 's/^/sha384-/'
+   * @example integrity: 'sha384-abc123...'
+   */
+  integrity?: string
 }
 
 /**
@@ -107,11 +168,13 @@ var configuration = {
 }
 document.getElementById('api-reference').setAttribute('data-configuration', JSON.stringify(configuration))
 </script>
-<script src="https://cdn.jsdelivr.net/npm/@scalar/api-reference"></script>
+${opts.integrity
+  ? `<script src="${CDN_SCALAR_URL}" crossorigin="anonymous" integrity="${opts.integrity}"></script>`
+  : `<script src="${CDN_SCALAR_URL}" crossorigin="anonymous"></script>`}
 </body>
 </html>`
 
-  return htmlHandler(html)
+  return htmlHandler(html, CSP_SCALAR)
 }
 
 // ── serveSwaggerUI ────────────────────────────────────────────────────────────
@@ -127,7 +190,10 @@ export interface SwaggerUIOptions {
   persist?:  boolean
   /** favicon URL */
   favicon?:  string
-  /** Custom CSS */
+  /**
+   * Raw CSS injected into <style> in <head>. Developer-only config.
+   * Never populate this from user-controlled input — it is not sanitised.
+   */
   customCss?: string
 }
 
@@ -200,7 +266,7 @@ window.addEventListener('load', function() {
 });` : ''
 
   const snippetsJs = snippets ? `
-<script src="https://unpkg.com/swagger-ui-request-snippets/dist/swagger-ui-request-snippets.js"></script>` : ''
+<script src="${CDN_SWAGGER_SNIP}" crossorigin="anonymous"></script>` : ''
 
   const html = `<!DOCTYPE html>
 <html lang="en">
@@ -210,15 +276,15 @@ window.addEventListener('load', function() {
 <meta name="referrer" content="no-referrer">
 <title>${title}</title>
 ${favicon}
-<link rel="stylesheet" href="https://unpkg.com/swagger-ui-dist/swagger-ui.css">
+<link rel="stylesheet" href="${CDN_SWAGGER_CSS}" crossorigin="anonymous">
 ${themeStyles}
 ${opts.customCss ? `<style>${opts.customCss}</style>` : ''}
 </head>
 <body>
 <div id="swagger-ui"></div>
 ${snippetsJs}
-<script src="https://unpkg.com/swagger-ui-dist/swagger-ui-bundle.js"></script>
-<script src="https://unpkg.com/swagger-ui-dist/swagger-ui-standalone-preset.js"></script>
+<script src="${CDN_SWAGGER_JS}" crossorigin="anonymous"></script>
+<script src="${CDN_SWAGGER_PRE}" crossorigin="anonymous"></script>
 <script>
 window.onload = function() {
   var cfg = {
@@ -242,7 +308,7 @@ window.onload = function() {
 </body>
 </html>`
 
-  return htmlHandler(html)
+  return htmlHandler(html, CSP_SWAGGER)
 }
 
 // ── serveRedoc ────────────────────────────────────────────────────────────────
@@ -294,14 +360,14 @@ ${favicon}
 </head>
 <body>
 <div id="redoc-container"></div>
-<script src="https://cdn.jsdelivr.net/npm/redoc/bundles/redoc.standalone.js"></script>
+<script src="${CDN_REDOC_URL}" crossorigin="anonymous"></script>
 <script>
 Redoc.init(${specJson}, ${redocConfig}, document.getElementById('redoc-container'))
 </script>
 </body>
 </html>`
 
-  return htmlHandler(html)
+  return htmlHandler(html, CSP_REDOC)
 }
 
 // ── serveDocs ─────────────────────────────────────────────────────────────────

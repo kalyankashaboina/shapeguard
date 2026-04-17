@@ -4,7 +4,7 @@ import type * as Preset from '@docusaurus/preset-classic'
 
 const config: Config = {
   title:       'shapeguard',
-  tagline:     'One package that replaces nine. Typed validation, logging, errors, and API docs for Express.',
+  tagline:     'Stop re-writing Express infrastructure. Typed validation, logging, errors, and API docs — wired together.',
   favicon:     'img/favicon.ico',
   url:         'https://kalyankashaboina.github.io',
   baseUrl:     '/shapeguard/',

@@ -54,6 +54,8 @@ export interface DefineRouteInput {
     }
     // Customise the key — default is IP+path, override for user-based limiting
     keyGenerator?: (req: import('express').Request) => string
+    /** Trust x-forwarded-for header for client IP (only set true behind a real reverse proxy). Default: false */
+    trustProxy?: boolean
   }
 
   /**
@@ -77,6 +79,21 @@ export interface DefineRouteInput {
    * @example defineRoute({ body: CreateUserDTO, timeout: 5000 })
    */
   timeout?: number
+
+  /**
+   * Called when validation fails for this route, before the error is thrown.
+   * Use to log analytics, increment counters, or send custom alerts.
+   * Throwing from this hook is silently ignored — the original validation error is still thrown.
+   *
+   * @example
+   * defineRoute({
+   *   body: CreateUserDTO,
+   *   onValidationError: (issues, req) => {
+   *     metrics.increment('validation.failed', { path: req.path })
+   *   },
+   * })
+   */
+  onValidationError?: (issues: import('../types/index.js').ValidationIssue[], req: import('express').Request) => void | Promise<void>
 }
 
 // RouteDefinition is defined in types/index.ts and re-exported here for backwards compatibility
@@ -90,6 +107,8 @@ interface _RouteDefinitionLocal extends RouteSchema {
     message?:      string
     store?:        { get(k: string): Promise<{ count: number; reset: number } | null>; set(k: string, v: { count: number; reset: number }): Promise<void> }
     keyGenerator?: (req: import('express').Request) => string
+    /** Trust x-forwarded-for header for client IP (only set true behind a real reverse proxy). Default: false */
+    trustProxy?: boolean
   }
   cache?:     { noStore: true; maxAge?: number; private?: boolean } | { maxAge: number; private?: boolean; noStore?: boolean; sMaxAge?: number; staleWhileRevalidate?: number }
 }
@@ -101,11 +120,36 @@ export function defineRoute(input: DefineRouteInput): RouteDefinition {
   if (input.query)     schema.query     = normalise(input.query)
   if (input.headers)   schema.headers   = normalise(input.headers)
   if (input.response)  schema.response  = normalise(input.response)
-  if (input.transform) schema.transform = input.transform
-  if (input.rateLimit) schema.rateLimit = input.rateLimit
-  if (input.cache)     schema.cache     = input.cache
-  if (input.timeout)   schema.timeout   = input.timeout
+  if (input.transform)          schema.transform          = input.transform
+  if (input.rateLimit)          schema.rateLimit          = input.rateLimit
+  if (input.cache)              schema.cache              = input.cache
+  if (input.timeout)            schema.timeout            = input.timeout
+  if (input.onValidationError)  schema.onValidationError  = input.onValidationError
   return schema
+}
+
+/**
+ * Merge two or more route definitions into one.
+ * Later definitions override earlier ones for the same key.
+ * Use this to share base schemas (e.g. auth headers) across routes
+ * without repeating them on every `defineRoute()` call.
+ *
+ * @example
+ * // Define once — reuse everywhere
+ * const AuthRoute = defineRoute({ headers: BearerTokenSchema })
+ *
+ * const CreateUserRoute = mergeRoutes(AuthRoute, defineRoute({
+ *   body:     CreateUserDTO,
+ *   response: UserResponseSchema,
+ * }))
+ *
+ * const GetUserRoute = mergeRoutes(AuthRoute, defineRoute({
+ *   params:   z.object({ id: z.string().uuid() }),
+ *   response: UserResponseSchema,
+ * }))
+ */
+export function mergeRoutes(...routes: RouteDefinition[]): RouteDefinition {
+  return Object.assign({}, ...routes)
 }
 
 // Auto-wrap zod-like schemas into zodAdapter.

@@ -3,6 +3,7 @@
 // ─────────────────────────────────────────────
 
 import type { Request } from 'express'
+import type { AppError } from '../errors/AppError.js'
 
 // ── Shared ZodLike duck-type ─────────────────
 // Used across adapters, define-route, create-dto, handle.
@@ -115,6 +116,14 @@ export interface ResPaginatedOpts {
   page:     number
   limit:    number
   message?: string
+  /**
+   * Base URL used to build RFC 8288 `Link` response headers.
+   * When provided, sets `Link: <url?page=2>; rel="next", <url?page=5>; rel="last"` etc.
+   * Omit to skip Link header generation.
+   *
+   * @example res.paginated({ data: users, total: 120, page: 1, limit: 20, baseUrl: req.baseUrl + req.path })
+   */
+  baseUrl?: string
 }
 
 // Cursor pagination options — nextCursor and hasMore are required; everything else optional
@@ -229,6 +238,52 @@ export interface LoggerConfig {
   // Suppress ALL log output — useful for test environments
   // Default: false
   silent?:          boolean
+
+  /**
+   * Called after every request completes.
+   * Use for custom metrics, APM, distributed tracing, analytics.
+   * Fires after the response is sent — never blocks the client.
+   *
+   * @example OpenTelemetry
+   * onRequest: ({ req, statusCode, durationMs }) => {
+   *   span.setAttributes({ 'http.status_code': statusCode, 'http.route': req.path })
+   *   span.end()
+   * }
+   *
+   * @example Datadog custom metrics
+   * onRequest: ({ statusCode, durationMs, requestId }) => {
+   *   dogstatsd.timing('api.request.duration', durationMs)
+   *   dogstatsd.increment('api.request.count', { status: statusCode })
+   * }
+   */
+  onRequest?: (ctx: RequestLogContext) => void | Promise<void>
+
+  /**
+   * Called only for slow requests (duration >= slowThreshold).
+   * Use to fire PagerDuty/OpsGenie alerts or add Sentry performance breadcrumbs.
+   *
+   * @example
+   * onSlowRequest: ({ req, durationMs }) => {
+   *   alerts.warn(`Slow request: ${req.method} ${req.path} took ${durationMs}ms`)
+   * }
+   */
+  onSlowRequest?: (ctx: RequestLogContext) => void | Promise<void>
+}
+
+/**
+ * Context passed to onRequest and onSlowRequest hooks.
+ * Contains everything needed for APM, distributed tracing, and custom metrics.
+ */
+export interface RequestLogContext {
+  req:         Request
+  statusCode:  number
+  durationMs:  number
+  endpoint:    string
+  requestId:   string | undefined
+  isSlow:      boolean
+  isError:     boolean
+  /** Client IP address (from x-forwarded-for or socket.remoteAddress) */
+  clientIp:    string
 }
 
 export interface ValidationConfig {
@@ -257,6 +312,25 @@ export interface ValidationConfig {
     maxArrayLength?:  number   // default: 1000
     maxStringLength?: number   // default: 10_000
   }
+
+  /**
+   * Additional Content-Type values to allow beyond the built-in defaults.
+   * Built-in: application/json, application/x-www-form-urlencoded, multipart/form-data
+   *
+   * @example
+   * // Allow JSON:API and vendor types
+   * shapeguard({ validation: {
+   *   extraContentTypes: ['application/vnd.api+json', 'application/graphql']
+   * }})
+   */
+  extraContentTypes?: string[]
+
+  /**
+   * Disable Content-Type enforcement entirely for all routes.
+   * Per-route override: set skipContentTypeCheck: true in defineRoute() limits.
+   * Default: false (Content-Type is enforced on POST/PUT/PATCH with body)
+   */
+  skipContentTypeCheck?: boolean
 }
 
 export interface ResponseConfig {
@@ -270,13 +344,110 @@ export interface ResponseConfig {
   includeRequestId?: boolean
 }
 
+/**
+ * Error handling and observability hooks.
+ * Every hook is optional — add only what you need.
+ *
+ * @example Sentry integration
+ * import * as Sentry from '@sentry/node'
+ * errorHandler({
+ *   errors: {
+ *     onError: async (err, req) => {
+ *       Sentry.withScope(scope => {
+ *         scope.setTag('requestId', req.id)
+ *         scope.setUser({ id: req.user?.id })
+ *         Sentry.captureException(err.originalError ?? err)
+ *       })
+ *     },
+ *   }
+ * })
+ */
 export interface ErrorsConfig {
-  // Message shown to clients for non-operational (programmer) errors in prod (default: 'Something went wrong')
+  // Message shown to clients for non-operational (programmer) errors in prod
+  // Default: 'Something went wrong'
   fallbackMessage?: string
 
-  // Hook called for every error before the response is sent — use for Sentry, alerting, etc.
-  onError?: (err: unknown, req: Request) => void
+  /**
+   * Called for EVERY error (operational and programmer) before the response is sent.
+   * Async — you can await Sentry.flush(), write to a DB, call a webhook, etc.
+   * Errors thrown from this hook are caught and logged — they never crash the server.
+   *
+   * The `context` object gives you everything needed for Sentry / Datadog / Rollbar:
+   *   - `err`            — the AppError (always an AppError, never raw unknown)
+   *   - `originalError`  — the original thrown value if it wasn't already an AppError
+   *   - `req`            — the Express request
+   *   - `statusCode`     — HTTP status code that will be sent
+   *   - `isOperational`  — true for expected errors (404, 422), false for crashes (500)
+   *   - `requestId`      — req.id for log correlation
+   *
+   * @example Sentry
+   * onError: async ({ err, req, isOperational }) => {
+   *   if (!isOperational) Sentry.captureException(err)
+   * }
+   *
+   * @example Datadog
+   * onError: ({ err, statusCode, requestId }) => {
+   *   metrics.increment('api.errors', { status: statusCode, code: err.code })
+   * }
+   */
+  onError?: (context: ErrorContext) => void | Promise<void>
+
+  /**
+   * Controls which errors are reported to onError.
+   * Default: 'all' — every error triggers onError.
+   * 'unhandled' — only non-operational (programmer) errors (5xx crashes).
+   * 'http5xx'   — only HTTP 500+ errors.
+   */
+  reportOn?: 'all' | 'unhandled' | 'http5xx'
+
+  /**
+   * Attach extra context to each error before reporting.
+   * Called before onError — use to enrich with user ID, tenant, feature flags.
+   * Return value is merged into the ErrorContext passed to onError.
+   *
+   * @example
+   * enrichContext: async (req) => ({
+   *   userId:   req.user?.id,
+   *   tenantId: req.headers['x-tenant-id'],
+   *   plan:     req.user?.plan,
+   * })
+   */
+  enrichContext?: (req: Request) => Record<string, unknown> | Promise<Record<string, unknown>>
+
+  /**
+   * Produce a Sentry/Datadog fingerprint for grouping similar errors.
+   * Return an array of strings — same array = same group.
+   * Default: no fingerprinting (tool uses its own heuristic).
+   *
+   * @example
+   * fingerprint: (err) => ['api-error', err.code, String(err.statusCode)]
+   */
+  fingerprint?: (err: AppError) => string[]
 }
+
+/**
+ * Full error context passed to onError.
+ * Gives observability tools everything they need.
+ */
+export interface ErrorContext {
+  /** The AppError that will be sent in the response */
+  err: AppError
+  /** The original thrown value — useful when the error was not an AppError */
+  originalError: unknown
+  /** The Express request */
+  req: Request
+  /** HTTP status code being sent */
+  statusCode: number
+  /** true for expected errors (404, 422, 409), false for crashes (500) */
+  isOperational: boolean
+  /** req.id for log/trace correlation */
+  requestId: string | undefined
+  /** Extra fields added by enrichContext() */
+  extra: Record<string, unknown>
+  /** Fingerprint produced by fingerprint() hook, or empty array */
+  fingerprint: string[]
+}
+
 
 
 // ── RouteDefinition — the combined schema + options object for a route ────────
@@ -292,8 +463,16 @@ export interface RouteDefinition extends RouteSchema {
     message?:      string
     store?:        { get(k: string): Promise<{ count: number; reset: number } | null>; set(k: string, v: { count: number; reset: number }): Promise<void> }
     keyGenerator?: (req: Request) => string
+    /** Trust x-forwarded-for for IP (set true only when behind a real reverse proxy). Default: false */
+    trustProxy?:   boolean
   }
   cache?: { noStore: true; maxAge?: number; private?: boolean } | { maxAge: number; private?: boolean; noStore?: boolean; sMaxAge?: number; staleWhileRevalidate?: number }
+  /**
+   * Called when body/params/query/headers validation fails for this route.
+   * Runs before the error is thrown. Use for analytics, counters, or alerts.
+   * Errors thrown from this hook are silently ignored.
+   */
+  onValidationError?: (issues: ValidationIssue[], req: Request) => void | Promise<void>
   // OpenAPI metadata — optional, used by generateOpenAPI()
   summary?:     string
   description?: string
@@ -314,22 +493,24 @@ export type LogLevel = 'debug' | 'info' | 'warn' | 'error'
 
 // ── Error codes ───────────────────────────────
 export const ErrorCode = {
-  VALIDATION_ERROR:     'VALIDATION_ERROR',
-  NOT_FOUND:            'NOT_FOUND',
-  UNAUTHORIZED:         'UNAUTHORIZED',
-  FORBIDDEN:            'FORBIDDEN',
-  CONFLICT:             'CONFLICT',
-  INTERNAL_ERROR:       'INTERNAL_ERROR',
-  METHOD_NOT_ALLOWED:   'METHOD_NOT_ALLOWED',
-  BODY_TOO_DEEP:        'BODY_TOO_DEEP',
-  BODY_ARRAY_TOO_LARGE: 'BODY_ARRAY_TOO_LARGE',
-  STRING_TOO_LONG:      'STRING_TOO_LONG',
-  INVALID_CONTENT_TYPE: 'INVALID_CONTENT_TYPE',
-  INVALID_JSON:         'INVALID_JSON',          // BUG-L2 FIX: was used in pre-parse.ts but missing from enum
-  PARAM_POLLUTION:      'PARAM_POLLUTION',
-  PROTO_POLLUTION:      'PROTO_POLLUTION',        // BUG-L1 FIX: removed extra whitespace
-  RATE_LIMIT_EXCEEDED:  'RATE_LIMIT_EXCEEDED',
-  REQUEST_TIMEOUT:      'REQUEST_TIMEOUT',
+  VALIDATION_ERROR:        'VALIDATION_ERROR',
+  NOT_FOUND:               'NOT_FOUND',
+  UNAUTHORIZED:            'UNAUTHORIZED',
+  FORBIDDEN:               'FORBIDDEN',
+  CONFLICT:                'CONFLICT',
+  INTERNAL_ERROR:          'INTERNAL_ERROR',
+  /** Alias matching the HTTP standard name. Same value as INTERNAL_ERROR. */
+  INTERNAL_SERVER_ERROR:   'INTERNAL_ERROR',
+  METHOD_NOT_ALLOWED:      'METHOD_NOT_ALLOWED',
+  BODY_TOO_DEEP:           'BODY_TOO_DEEP',
+  BODY_ARRAY_TOO_LARGE:    'BODY_ARRAY_TOO_LARGE',
+  STRING_TOO_LONG:         'STRING_TOO_LONG',
+  INVALID_CONTENT_TYPE:    'INVALID_CONTENT_TYPE',
+  INVALID_JSON:            'INVALID_JSON',          // BUG-L2 FIX: was used in pre-parse.ts but missing from enum
+  PARAM_POLLUTION:         'PARAM_POLLUTION',
+  PROTO_POLLUTION:         'PROTO_POLLUTION',        // BUG-L1 FIX: removed extra whitespace
+  RATE_LIMIT_EXCEEDED:     'RATE_LIMIT_EXCEEDED',
+  REQUEST_TIMEOUT:         'REQUEST_TIMEOUT',
 } as const
 
 export type ErrorCode = typeof ErrorCode[keyof typeof ErrorCode]

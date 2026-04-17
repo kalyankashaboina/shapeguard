@@ -197,7 +197,6 @@ export function requestLogger(logger: Logger, config: LoggerConfig = {}): Reques
     const getResBody = logResBody ? captureResponseBody(res) : null
 
     // ── Incoming  >>  ────────────────────────────────────────────────────────
-    // logIncoming:false hides arrival lines while keeping response lines
     if (logAll && logIncoming) {
       const inPayload: Record<string, unknown> = {
         requestId: req.id,
@@ -224,6 +223,31 @@ export function requestLogger(logger: Logger, config: LoggerConfig = {}): Reques
       const endpoint    = getEndpoint(req)
       const isSlow      = slowMs > 0 && duration_ms >= slowMs
       const isError     = status >= 400
+      const clientIp    = getClientIp(req)
+
+      // ── Observability hooks — fire async, never block response ────────────
+      if (config.onRequest || (config.onSlowRequest && isSlow)) {
+        const ctx: import('../types/index.js').RequestLogContext = {
+          req,
+          statusCode:  status,
+          durationMs:  duration_ms,
+          endpoint,
+          requestId:   (req as Request & { id?: string }).id,
+          isSlow,
+          isError,
+          clientIp,
+        }
+        if (config.onRequest) {
+          void Promise.resolve(config.onRequest(ctx)).catch(e => {
+            logger.error({ error: String(e) }, '[shapeguard] onRequest hook threw')
+          })
+        }
+        if (config.onSlowRequest && isSlow) {
+          void Promise.resolve(config.onSlowRequest(ctx)).catch(e => {
+            logger.error({ error: String(e) }, '[shapeguard] onSlowRequest hook threw')
+          })
+        }
+      }
 
       if (!logAll && !isError && !isSlow) return
 
@@ -235,7 +259,7 @@ export function requestLogger(logger: Logger, config: LoggerConfig = {}): Reques
         duration_ms,
       }
       if (logIp)
-        outPayload['ip'] = getClientIp(req)
+        outPayload['ip'] = clientIp
       if (logReqBody && req.body !== undefined)
         outPayload['reqBody'] = redactBody(req.body, extraRedact)
       if (logResBody && getResBody)
@@ -246,8 +270,6 @@ export function requestLogger(logger: Logger, config: LoggerConfig = {}): Reques
       const ts      = timestamp()
       const sc      = statusColor(status)
 
-      // lineColor:'level' — entire method + status coloured by response level
-      // lineColor:'method' (default) — method coloured by verb, status by level
       const methodColorFn = lineColor === 'level' ? statusColor(status) : methodColor(req.method)
 
       const statusS = sc + C.bold + status.toString() + C.reset
@@ -257,7 +279,7 @@ export function requestLogger(logger: Logger, config: LoggerConfig = {}): Reques
       const rid     = logId && req.id
         ? `  ${C.dim}[${formatRequestId(req.id, shortId)}]${C.reset}`
         : ''
-      const ipStr   = logIp ? `  ${C.dim}${getClientIp(req)}${C.reset}` : ''
+      const ipStr   = logIp ? `  ${C.dim}${clientIp}${C.reset}` : ''
       const slow    = isSlow ? `  ${C.yellow}${C.bold}SLOW${C.reset}` : ''
 
       const msg = `${ts}  <<  ${statusS}  ${methodS} ${ep} ${dur}${rid}${ipStr}${slow}`

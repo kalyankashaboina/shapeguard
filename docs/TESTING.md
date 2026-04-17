@@ -292,6 +292,155 @@ it('returns 503 when a check fails', async () => {
 
 ---
 
+
+---
+
+## Testing SSE endpoints <a name="sse-testing"></a>
+
+Test SSE routes using supertest with a streaming response:
+
+```ts
+import supertest from 'supertest'
+
+it('streams SSE events', async () => {
+  const events: unknown[] = []
+
+  await supertest(app)
+    .get('/live-prices')
+    .buffer(false)                          // receive chunks as they arrive
+    .parse((res, callback) => {
+      res.on('data', (chunk: Buffer) => {
+        const lines = chunk.toString().split('\n')
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            try { events.push(JSON.parse(line.slice(6))) } catch { /* skip */ }
+          }
+        }
+      })
+      res.on('end', () => callback(null, null))
+    })
+
+  expect(events.length).toBeGreaterThan(0)
+})
+```
+
+For unit tests, mock the stream directly:
+
+```ts
+import { sseStream } from 'shapeguard'
+
+it('sends typed SSE events', () => {
+  const sent: unknown[] = []
+  const mockRes = {
+    headersSent: false,
+    writableEnded: false,
+    setHeader: vi.fn(),
+    flushHeaders: vi.fn(),
+    write: (chunk: string) => { sent.push(chunk) },
+    end: vi.fn(),
+    once: (_event: string, fn: () => void) => { /* store or call */ },
+  }
+
+  const stream = sseStream(mockRes as any)
+  stream.send({ type: 'update', data: { count: 42 } })
+  stream.heartbeat()
+
+  expect(sent[0]).toContain('event: update')
+  expect(sent[0]).toContain('"count":42')
+  expect(sent[1]).toContain(': heartbeat')
+})
+```
+
+---
+
+## Testing circuit breakers <a name="circuit-breaker-testing"></a>
+
+```ts
+import { circuitBreaker, CircuitOpenError } from 'shapeguard'
+
+it('opens after threshold failures', async () => {
+  const cb = circuitBreaker({ name: 'test', threshold: 2, resetTimeout: 100 })
+
+  const fail = () => cb.call(() => Promise.reject(new Error('service down')))
+
+  await expect(fail()).rejects.toThrow('service down')
+  await expect(fail()).rejects.toThrow('service down')
+  // Circuit now OPEN
+  await expect(fail()).rejects.toBeInstanceOf(CircuitOpenError)
+  expect(cb.state).toBe('OPEN')
+})
+
+it('recovers after resetTimeout', async () => {
+  const cb = circuitBreaker({ name: 'test', threshold: 1, resetTimeout: 50 })
+
+  // Trip the circuit
+  await expect(cb.call(() => Promise.reject(new Error('down')))).rejects.toThrow()
+  expect(cb.state).toBe('OPEN')
+
+  // Wait for cooldown
+  await new Promise(r => setTimeout(r, 60))
+
+  // Should attempt recovery (HALF_OPEN)
+  await expect(cb.call(() => Promise.resolve('ok'))).resolves.toBe('ok')
+  expect(cb.state).toBe('CLOSED')
+})
+```
+
+---
+
+## Testing context store <a name="context-testing"></a>
+
+```ts
+import { setContext, getContext, requireContext } from 'shapeguard'
+import { mockRequest } from 'shapeguard/testing'
+
+it('passes context between middleware', () => {
+  const req = mockRequest()
+
+  // Simulate auth middleware
+  setContext(req as any, 'user', { id: 'u1', role: 'admin' })
+
+  // Simulate route reading context
+  const user = getContext<{ id: string; role: string }>(req as any, 'user')
+  expect(user?.id).toBe('u1')
+  expect(user?.role).toBe('admin')
+})
+
+it('requireContext throws when key missing', () => {
+  const req = mockRequest()
+  expect(() => requireContext(req as any, 'user')).toThrow('key "user" not found')
+})
+```
+
+---
+
+## Testing validateResponse() <a name="validate-response-testing"></a>
+
+```ts
+import { validateResponse, checkResponse } from 'shapeguard'
+import { z } from 'zod'
+
+const UserSchema = z.object({ id: z.string(), email: z.string() })
+
+it('strips sensitive fields from response', async () => {
+  const raw = { id: 'u1', email: 'alice@example.com', password: 'hashed' }
+  const clean = await validateResponse(raw, UserSchema)
+  expect(clean).toEqual({ id: 'u1', email: 'alice@example.com' })
+  expect((clean as any).password).toBeUndefined()
+})
+
+it('checkResponse returns errors without throwing', async () => {
+  const raw = { id: 123, email: null }  // wrong types
+  const result = await checkResponse(raw, UserSchema)
+  expect(result.success).toBe(false)
+  if (!result.success) {
+    expect(result.errors.length).toBeGreaterThan(0)
+  }
+})
+```
+
+---
+
 ## Testing controllers with cursorPaginated <a name="cursor-pagination-testing"></a>
 
 `mockResponse()` now includes `cursorPaginated` — previously missing:

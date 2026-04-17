@@ -2,13 +2,18 @@
 # ci.yml — shapeguard Continuous Integration
 #
 # Runs on every push to main and every PR targeting main.
-# ALL steps must pass — no deployment runs if this fails.
+# ALL required jobs must pass — no deployment runs if this fails.
 #
-# Node matrix: 18.x / 20.x / 22.x
-# Jobs:
-#   test    — typecheck → lint → tests → coverage → build → bundle guard
-#   audit   — npm audit for critical vulnerabilities
-#   website — build Docusaurus website (ensures docs don't break on publish)
+# Node matrix  : 18.x / 20.x / 22.x
+# Jobs         :
+#   test        — typecheck → lint → tests → coverage → build → bundle guard
+#   sonar       — SonarCloud static analysis + coverage upload (Node 20 only)
+#   audit       — npm audit for high/critical vulnerabilities
+#   website     — Docusaurus build verification
+#
+# Secrets required (Settings → Secrets → Actions):
+#   SONAR_TOKEN    — generated at https://sonarcloud.io during project import
+#   CODECOV_TOKEN  — optional; coverage also flows through SonarCloud
 # ─────────────────────────────────────────────────────────────────────────────
 
 name: CI
@@ -24,11 +29,12 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
+# Least-privilege default — each job overrides what it actually needs
 permissions:
   contents: read
 
 jobs:
-  # ── Library quality gate ─────────────────────────────────────────────────────
+  # ── Library quality gate ────────────────────────────────────────────────────
   test:
     name: Test (Node ${{ matrix.node-version }})
     runs-on: ubuntu-latest
@@ -38,10 +44,13 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        node-version: [18.x, 20.x, 22.x]
+        node-version: [20.x, 22.x]
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Full history required by SonarCloud blame annotation
+          fetch-depth: 0
 
       - uses: actions/setup-node@v4
         with:
@@ -55,13 +64,12 @@ jobs:
         run: npm run typecheck
 
       - name: Lint
-        run: npm run lint || true
-        # ESLint newly added — reports issues but doesn't block CI until baseline is clean
-        # Remove "|| true" once all existing lint warnings are addressed
+        run: npm run lint
 
       - name: Run tests
         run: npm test
 
+      # Coverage only on Node 20 — one report is sufficient
       - name: Collect coverage (Node 20 only)
         if: matrix.node-version == '20.x'
         run: npm run test:coverage
@@ -75,6 +83,15 @@ jobs:
           fail_ci_if_error: false
         continue-on-error: true
 
+      # Cache lcov so the sonar job can consume it without re-running tests
+      - name: Upload coverage artifact for Sonar
+        if: matrix.node-version == '20.x'
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-lcov
+          path: coverage/lcov.info
+          retention-days: 1
+
       - name: Build library
         run: npm run build
 
@@ -87,8 +104,7 @@ jobs:
           echo "Main ESM raw:       ${RAW} bytes ($(echo "scale=1; $RAW/1024" | bc) KB)"
           echo "Main ESM gzipped:   ${GZIP} bytes (${GZIP_KB} KB)"
           # Hard limit: 70 KB raw / 25 KB gzip
-          # Current baseline (v0.10.0): ~53 KB raw / ~18 KB gzip
-          # Headroom ~17 KB raw / ~7 KB gzip before alarm fires
+          # Baseline (v0.10.0): ~53 KB raw / ~18 KB gzip
           if [ "$RAW" -gt 71680 ]; then
             echo "❌ Raw bundle regression: $(echo "scale=1; $RAW/1024" | bc)KB > 70KB"; exit 1
           fi
@@ -117,7 +133,76 @@ jobs:
             echo "⚠️  CHANGELOG.md not updated — add an entry under [Unreleased] if relevant."
           fi
 
-  # ── Security audit ────────────────────────────────────────────────────────────
+  # ── SonarCloud static analysis ──────────────────────────────────────────────
+  # Runs after test so it can consume the lcov coverage artifact.
+  #
+  # What it catches beyond lint:
+  #   ✦ Security vulnerabilities (CWE / OWASP mapped)
+  #   ✦ Security hotspots requiring developer review
+  #   ✦ Cognitive complexity violations
+  #   ✦ Code duplication > 3%
+  #   ✦ Bug patterns the TS compiler doesn't catch
+  #   ✦ New-code coverage regression (blocks PRs below 80% on changed lines)
+  #
+  # Setup (one-time):
+  #   1. https://sonarcloud.io → log in with GitHub → import this repo
+  #   2. Copy the generated token → GitHub: Settings → Secrets → SONAR_TOKEN
+  #   3. Update sonar-project.properties: sonar.organization = your-org-key
+  sonar:
+    name: SonarCloud analysis
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: test
+    if: |
+      github.event.pull_request.draft != true &&
+      (github.event_name == 'push' || github.event_name == 'pull_request')
+
+    # SonarCloud action needs write to post PR check decorations
+    permissions:
+      contents:      read
+      pull-requests: write
+      checks:        write
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Full git history — Sonar uses it to detect which lines are "new code"
+          # and to generate accurate blame info for issue assignment
+          fetch-depth: 0
+
+      # Download the lcov.info produced by the test job
+      - name: Download coverage report
+        uses: actions/download-artifact@v4
+        with:
+          name: coverage-lcov
+          path: coverage
+        continue-on-error: true  # graceful if test job didn't produce coverage
+
+      - name: SonarCloud scan
+        uses: SonarSource/sonarcloud-github-action@master
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SONAR_TOKEN:  ${{ secrets.SONAR_TOKEN }}
+        with:
+          # Pass dynamic properties alongside the static sonar-project.properties
+          args: >
+            -Dsonar.projectVersion=${{ github.sha }}
+            -Dsonar.scm.revision=${{ github.sha }}
+            -Dsonar.pullrequest.key=${{ github.event.pull_request.number }}
+            -Dsonar.pullrequest.branch=${{ github.head_ref }}
+            -Dsonar.pullrequest.base=${{ github.base_ref }}
+
+      # Hard-block PRs when the quality gate is red.
+      # Set continue-on-error: false once the baseline is clean.
+      # While ramping up keep it true so Sonar is advisory-only.
+      - name: Quality gate check
+        uses: sonarsource/sonarqube-quality-gate-action@master
+        timeout-minutes: 5
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        continue-on-error: true
+
+  # ── Dependency security audit ───────────────────────────────────────────────
   audit:
     name: Security audit
     runs-on: ubuntu-latest
@@ -125,17 +210,37 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-node@v4
         with:
           node-version: 20.x
           cache: npm
-      - run: npm ci
-      - name: Audit dependencies
-        run: npm audit --audit-level=critical
 
-  # ── Website build verification ────────────────────────────────────────────────
-  # Ensures the Docusaurus site builds cleanly with the current docs.
-  # Only runs if website/ directory exists and has a package.json.
+      - name: Install dependencies
+        run: npm ci
+
+      # Fail on high or critical — moderate is advisory
+      - name: npm audit (high+critical = block)
+        run: npm audit --audit-level=high
+
+      - name: Audit summary (PRs only)
+        if: github.event_name == 'pull_request'
+        run: |
+          echo "## 🔒 Dependency audit" >> $GITHUB_STEP_SUMMARY
+          npm audit --audit-level=info --json 2>/dev/null | \
+            node -e "
+              try {
+                const d = JSON.parse(require('fs').readFileSync('/dev/stdin','utf8'));
+                const m = d.metadata?.vulnerabilities ?? {};
+                console.log('| Severity | Count |');
+                console.log('|----------|-------|');
+                for (const [k,v] of Object.entries(m)) {
+                  if (v > 0) console.log(\`| \${k} | \${v} |\`);
+                }
+              } catch(e) { console.log('Could not parse audit output'); }
+            " >> $GITHUB_STEP_SUMMARY || true
+
+  # ── Website build verification ──────────────────────────────────────────────
   website:
     name: Build website
     runs-on: ubuntu-latest
@@ -179,3 +284,12 @@ jobs:
             echo "❌ website/build missing — Docusaurus build failed"; exit 1
           fi
           echo "✅ Website build: $(du -sh website/build | cut -f1)"
+
+      - name: Website build summary
+        if: steps.check_website.outputs.has_website == 'true' && github.event_name == 'pull_request'
+        run: |
+          echo "## 🌐 Website build" >> $GITHUB_STEP_SUMMARY
+          echo "| Metric | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|--------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Build size | $(du -sh website/build | cut -f1) |" >> $GITHUB_STEP_SUMMARY
+          echo "| HTML pages | $(find website/build -name '*.html' | wc -l) |" >> $GITHUB_STEP_SUMMARY

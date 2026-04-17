@@ -1,3 +1,36 @@
+# Changelog
+
+## v0.11.0 — 2026-04-17
+
+### New features
+
+- **`AppError.fromFetch(response)`** — wrap downstream `fetch()` errors with the upstream HTTP status code; no more manual error wrapping when calling external APIs
+- **`AppError.withContext(extra)`** — attach runtime data (userId, tenantId, requestedBy) to an existing error without mutating the original; chains cleanly on throw sites
+- **`validateResponse(data, schema)`** — strip + validate a response object outside the HTTP lifecycle; use for unit testing, pre-cache validation, PII-scrubbing before audit logs
+- **`checkResponse(data, schema)`** — non-throwing validation; returns `{ success, errors }` for logging mismatches without crashing
+- **`createDTO()` accepts any `SchemaAdapter`** — `joiAdapter`, `yupAdapter`, or any custom adapter now works, not just Zod schemas
+- **`res.fail()` accepts `AppError` directly** — `res.fail(AppError.notFound('User'))` instead of destructuring manually
+- **Circuit-breaker `probe()`** — now reports failure count + estimated retry time in the thrown error; surfaces useful info in health check responses
+
+### Bug fixes
+
+- **`inflight` counter double-decrement** — `gracefulShutdown` decrements in-flight count only once per request even when both `finish` and `close` fire (keep-alive connections)
+- **`validate()` unnecessary `setInterval`** — timer only created when the route actually configures `rateLimit`; no more leaking intervals on every route mount
+- **`handle()` missing `cleanup()`** — rate-limit store cleanup now accessible via `route.cleanup()` on the array returned by `handle()`
+- **Global `timeout` never wired** — `shapeguard({ timeout: 30_000 })` now actually fires a 408 for all routes
+- **`safeJsonParse` not re-exported** — now exported from the main `shapeguard` package entry point
+
+### Enhancements
+
+- **`ValidationConfig.extraContentTypes`** — add custom MIME types (`application/vnd.api+json`, `application/graphql`) beyond the built-in three
+- **`ValidationConfig.skipContentTypeCheck`** — disable Content-Type enforcement entirely for raw/webhook routes
+- **`rateLimit.trustProxy`** — defaults to `false` (secure against IP spoofing); set `true` only when behind a trusted reverse proxy
+- **`X-Content-Type-Options: nosniff`** on all error responses
+- Test count: 979 → **1,041** (62 new tests for all new features and edge cases)
+- All docs updated: CONFIGURATION, ERRORS, VALIDATION, TESTING
+
+---
+
 <!-- Keep a Changelog — https://keepachangelog.com/en/1.0.0/ -->
 <!-- Semantic Versioning — https://semver.org/spec/v2.0.0.html -->
 
@@ -11,7 +44,7 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-> All changes below are in the fixed codebase and will ship as **v0.10.0**.
+> All changes below are in the fixed codebase and will ship as **v0.11.0**.
 
 ### New features
 

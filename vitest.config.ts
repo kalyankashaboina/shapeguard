@@ -8,7 +8,7 @@ export default defineConfig({
     exclude:     ['examples/**', 'node_modules/**'],
     coverage: {
       provider:   'v8',
-      reporter:   ['text', 'lcov', 'html'],
+      reporter:   ['text', 'lcov', 'clover', 'html'],
       include:    ['src/**/*.ts'],
       exclude:    ['src/**/*.test.ts', 'src/types/**'],
       thresholds: {

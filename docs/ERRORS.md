@@ -396,6 +396,107 @@ app.use(errorHandler())
 
 ---
 
+
+---
+
+## New AppError helpers <a name="new-helpers"></a>
+
+### `AppError.httpStatus(status, message?)` — status-code first
+
+```ts
+// Create from HTTP status code — picks the right code and message automatically
+throw AppError.httpStatus(422, 'Email already in use')
+throw AppError.httpStatus(503)  // 'Service temporarily unavailable'
+throw AppError.httpStatus(429, 'Too many requests — try again in 60s')
+```
+
+### `AppError.badRequest(message, details?)`
+
+```ts
+throw AppError.badRequest('Invalid date range', { from: '2020-01-01', to: '2019-01-01' })
+```
+
+### `AppError.tooManyRequests(message, retryAfter?)`
+
+```ts
+throw AppError.tooManyRequests('API limit reached', 60)  // Retry-After: 60
+```
+
+### `AppError.serviceUnavailable(message?)`
+
+```ts
+throw AppError.serviceUnavailable('Payment provider is down')
+```
+
+### `AppError.is(err, code)` — type-narrowing guard
+
+```ts
+try {
+  await UserService.create(body)
+} catch (err) {
+  if (AppError.is(err, 'CONFLICT')) {
+    return res.fail({ code: 'EMAIL_TAKEN', message: 'Email is already registered', status: 409 })
+  }
+  throw err  // re-throw everything else
+}
+```
+
+### `AppError.hasStatus(err, status)` — check by HTTP status
+
+```ts
+if (AppError.hasStatus(err, 404)) {
+  // Handle not-found specifically
+}
+```
+
+### `AppError.fromFetch(response)` — downstream API errors
+
+```ts
+const resp = await fetch('https://payments.api/charge', { method: 'POST', body })
+if (!resp.ok) throw await AppError.fromFetch(resp)
+// Throws AppError with the upstream status code and message
+```
+
+### `.withContext(extra)` — attach extra details to an error
+
+```ts
+throw AppError.notFound('User')
+  .withContext({ userId: req.params.id, requestedBy: req.user?.id })
+
+// In errorHandler onError hook:
+onError: ({ err }) => {
+  if (err.details) Sentry.setContext('error_context', err.details as Record<string, unknown>)
+}
+```
+
+### `AppError.define<TDetails>(code, status, message?)` — typed factory
+
+```ts
+// Define once
+const InsufficientFunds = AppError.define<{ balance: number; required: number }>(
+  'INSUFFICIENT_FUNDS', 402, 'Insufficient account balance'
+)
+
+// Throw anywhere with full TypeScript type checking on details
+throw InsufficientFunds({ balance: 9.99, required: 49.99 })
+```
+
+---
+
+## Passing AppError to res.fail() <a name="apperror-in-fail"></a>
+
+`res.fail()` now accepts an `AppError` directly — no need to destructure manually:
+
+```ts
+// Before:
+res.fail({ code: err.code, message: err.message, status: err.statusCode })
+
+// After:
+res.fail(AppError.conflict('Email'))
+res.fail(AppError.httpStatus(422, 'Validation failed'))
+```
+
+---
 ## All error codes <a name="codes"></a>
 
 Stable string codes — safe to match in frontend code.

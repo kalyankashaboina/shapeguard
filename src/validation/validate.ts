@@ -37,6 +37,8 @@ export interface ValidateOptions extends RouteSchema {
     message?:      string
     store?:        { get(k: string): Promise<{ count: number; reset: number } | null>; set(k: string, v: { count: number; reset: number }): Promise<void> }
     keyGenerator?: (req: Request) => string
+    /** Use socket.remoteAddress instead of x-forwarded-for when no proxy is present. Default: false */
+    trustProxy?: boolean
   }
   // BUG #4 fix: noStore makes maxAge optional (no longer a redundant required field).
   // Improvement #5: added sMaxAge and staleWhileRevalidate for CDN support.
@@ -127,15 +129,19 @@ async function validateRequest(req: Request, res: Response, schema: RouteSchema 
   const limits    = { ...DEFAULT_LIMITS, ...(appConfig?.limits ?? {}), ...(opts.limits ?? {}) }
   // Per-route sanitize merges on top of app config — per-route wins
   const sanitize  = getConfig(res, opts.sanitize)
+  // onValidationError hook — fired when any schema validation fails
+  const onValErr  = (schema as { onValidationError?: (issues: ValidationIssue[], req: Request) => void | Promise<void> }).onValidationError
 
   if (schema.body) {
     // Only enforce Content-Type when body schema is defined AND the body is a non-empty object
     // express.json() sets req.body={} for bodyless requests, which would incorrectly trigger
     const hasRealBody = req.body !== undefined &&
       !(typeof req.body === 'object' && req.body !== null && Object.keys(req.body).length === 0 && req.method !== 'GET')
-    enforceContentType(req.method, req.headers['content-type'], hasRealBody)
+    if (!sanitize.skipContentTypeCheck) {
+      enforceContentType(req.method, req.headers['content-type'], hasRealBody, sanitize.extraContentTypes)
+    }
     const clean = runPreParse(req.body, limits)
-    let parsed = await parseOrThrow(clean, normalise(schema.body, allErrors), allErrors, sanitize)
+    let parsed = await parseOrThrow(clean, normalise(schema.body, allErrors), allErrors, sanitize, req, onValErr)
     // Apply global string transforms (trim, lowercase) if configured
     const strCfg = appConfig?.strings
     if (strCfg) parsed = applyStringTransforms(parsed, strCfg)
@@ -153,7 +159,7 @@ async function validateRequest(req: Request, res: Response, schema: RouteSchema 
   }
 
   if (schema.params) {
-    req.params = await parseOrThrow(req.params, normalise(schema.params, allErrors), allErrors, sanitize) as typeof req.params
+    req.params = await parseOrThrow(req.params, normalise(schema.params, allErrors), allErrors, sanitize, req, onValErr) as typeof req.params
   }
 
   if (schema.query) {
@@ -169,7 +175,7 @@ async function validateRequest(req: Request, res: Response, schema: RouteSchema 
         throw err
       }
     }
-    req.query = await parseOrThrow(req.query, normalise(schema.query, allErrors), allErrors, sanitize) as typeof req.query
+    req.query = await parseOrThrow(req.query, normalise(schema.query, allErrors), allErrors, sanitize, req, onValErr) as typeof req.query
   }
 
   if (schema.headers) {
@@ -177,7 +183,7 @@ async function validateRequest(req: Request, res: Response, schema: RouteSchema 
     // validated/stripped value, matching the behaviour of body/params/query.
     // Express does not allow full reassignment of req.headers (it's a getter
     // on the IncomingMessage prototype), so we merge the parsed fields in-place.
-    const parsedHeaders = await parseOrThrow(req.headers, normalise(schema.headers, allErrors), allErrors, sanitize)
+    const parsedHeaders = await parseOrThrow(req.headers, normalise(schema.headers, allErrors), allErrors, sanitize, req, onValErr)
     if (parsedHeaders !== null && typeof parsedHeaders === 'object') {
       Object.assign(req.headers, parsedHeaders)
     }
@@ -190,17 +196,26 @@ async function parseOrThrow(
   adapter:   SchemaAdapter,
   allErrors: boolean,
   sanitize:  ValidationConfig,
+  req?:      Request,
+  onValidationError?: (issues: ValidationIssue[], req: Request) => void | Promise<void>,
 ): Promise<unknown> {
   const result = await adapter.safeParse(data)
   if (result.success) return result.data
   if (!result.errors.length) throw AppError.internal('Validation produced no issues')
 
-  if (allErrors) {
-    const sanitized: ValidationIssue[] = result.errors.map(i => sanitizeValidationIssue(i, sanitize))
-    throw AppError.validation(sanitized)
+  const issues = allErrors
+    ? result.errors.map(i => sanitizeValidationIssue(i, sanitize))
+    : [sanitizeValidationIssue(result.errors[0]!, sanitize)]
+
+  // Fire the hook before throwing — errors from the hook are swallowed
+  if (onValidationError && req) {
+    try { await Promise.resolve(onValidationError(issues, req)) } catch { /* intentional */ }
   }
 
-  throw AppError.validation(sanitizeValidationIssue(result.errors[0]!, sanitize))
+  if (allErrors) {
+    throw AppError.validation(issues)
+  }
+  throw AppError.validation(issues[0]!)
 }
 
 // ── Apply global string transforms ───────────
@@ -218,8 +233,15 @@ export function _clearRateLimitStore(): void { /* no-op — stores are now per-r
 
 // ── Main export ──────────────────────────────────────────────────────────────
 export function validate(schema: RouteSchema | ValidateOptions): RequestHandler & { cleanup: () => void } {
-  const { store: routeRlStore, startCleanup } = createRateLimitStore()
-  const stopCleanup = startCleanup()
+  const opts = schema as ValidateOptions
+
+  // Only create the in-memory rate limit store when this route actually uses rate limiting.
+  // Previously this was created unconditionally — every validate() call started a cleanup
+  // interval timer even on routes that never needed one.
+  const hasRateLimit  = !!(opts.rateLimit && !opts.rateLimit.store)
+  const rlStoreResult = hasRateLimit ? createRateLimitStore() : null
+  const routeRlStore  = rlStoreResult?.store
+  const stopCleanup   = rlStoreResult?.startCleanup() ?? (() => { /* no-op */ })
 
   const mw = asyncHandler(async (req: Request, res: Response, next: NextFunction) => {
     try {
@@ -229,7 +251,7 @@ export function validate(schema: RouteSchema | ValidateOptions): RequestHandler 
       if (opts.rateLimit) {
         const rlOpts = opts.rateLimit.store
           ? opts.rateLimit
-          : { ...opts.rateLimit, inMemoryStore: routeRlStore }
+          : { ...opts.rateLimit, inMemoryStore: routeRlStore! }
         try {
           await checkRateLimit(req, rlOpts)
         } catch (err) {
@@ -259,8 +281,10 @@ export function validate(schema: RouteSchema | ValidateOptions): RequestHandler 
       // again from the timeout callback would be a second call on the same
       // request chain which Express 4 ignores. Direct res.status().json() is
       // the only reliable way to send a 408 from an async timer callback.
+      // Cap at 10 minutes (600_000ms) to prevent accidental near-infinite timeouts.
+      const MAX_TIMEOUT_MS = 600_000
       if (opts.timeout && opts.timeout > 0) {
-        const timeoutMs = opts.timeout
+        const timeoutMs = Math.min(opts.timeout, MAX_TIMEOUT_MS)
         const timer = setTimeout(() => {
           if (!res.headersSent) {
             res.status(408).json({

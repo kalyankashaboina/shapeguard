@@ -73,14 +73,20 @@ export function sanitizeStrings(data: unknown): unknown {
 
 // ── Content-Type enforcement ──────────────────
 const BODY_METHODS = new Set(['POST', 'PUT', 'PATCH'])
-const ALLOWED_CT   = ['application/json', 'application/x-www-form-urlencoded', 'multipart/form-data']
+const BUILT_IN_CT = ['application/json', 'application/x-www-form-urlencoded', 'multipart/form-data']
 
-export function enforceContentType(method: string, contentType: string | undefined, hasBody: boolean): void {
+export function enforceContentType(
+  method:      string,
+  contentType: string | undefined,
+  hasBody:     boolean,
+  extra:       string[] = [],
+): void {
   if (!BODY_METHODS.has(method.toUpperCase()) || !hasBody) return
   if (!contentType) {
     throw preParsError(ErrorCode.INVALID_CONTENT_TYPE, 'Content-Type header is required for POST, PUT, and PATCH requests')
   }
-  const ct = contentType.toLowerCase().split(';')[0]!.trim()
+  const ct         = contentType.toLowerCase().split(';')[0]!.trim()
+  const ALLOWED_CT = extra.length > 0 ? [...BUILT_IN_CT, ...extra.map(s => s.toLowerCase())] : BUILT_IN_CT
   if (!ALLOWED_CT.some(a => ct.startsWith(a))) {
     throw preParsError(ErrorCode.INVALID_CONTENT_TYPE, `Content-Type '${ct}' is not supported`)
   }

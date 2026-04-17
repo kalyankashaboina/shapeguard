@@ -613,6 +613,107 @@ the timer is cleared immediately. Standalone: works without `shapeguard()` mount
 
 ---
 
+
+---
+
+## Standalone response validation — `validateResponse()` <a name="validate-response"></a>
+
+Strip and validate a response object outside of the full route lifecycle.
+
+```ts
+import { validateResponse, checkResponse } from 'shapeguard'
+import { z } from 'zod'
+
+const UserSchema = z.object({ id: z.string(), email: z.string() })
+
+// validateResponse() — strips unknown fields, throws if invalid
+const clean = await validateResponse(rawUserFromDB, UserSchema)
+// clean.password === undefined — stripped automatically
+
+// checkResponse() — never throws, returns a result object
+const result = await checkResponse(apiResponse, CacheableSchema)
+if (!result.success) {
+  logger.warn({ errors: result.errors }, 'Response does not match schema')
+}
+```
+
+Use cases:
+- **Unit testing** — verify response shape without HTTP
+- **Before caching** — never cache data that doesn't match your schema
+- **Audit logs** — strip PII fields before writing to logs
+
+---
+
+## Merging route definitions — `mergeRoutes()` <a name="merge-routes"></a>
+
+Compose route schemas from reusable base definitions.
+
+```ts
+import { mergeRoutes, defineRoute } from 'shapeguard'
+
+// Shared auth + rate-limit base
+const AuthenticatedRoute = defineRoute({
+  rateLimit: { windowMs: 60_000, max: 100, trustProxy: true },
+  headers:   z.object({ authorization: z.string().startsWith('Bearer ') }),
+})
+
+// Specific routes extend the base
+const CreateUserRoute = mergeRoutes(
+  AuthenticatedRoute,
+  defineRoute({
+    body:     CreateUserDTO,
+    response: UserResponseSchema,
+    timeout:  10_000,
+  })
+)
+
+// Later definition wins on collision
+const SlowRouteOverride = mergeRoutes(AuthenticatedRoute, defineRoute({ timeout: 60_000 }))
+```
+
+---
+
+## Validation hook — `onValidationError` <a name="validation-hook"></a>
+
+Fire a callback when any schema validation fails — before the error is thrown.
+
+```ts
+const CreateUserRoute = defineRoute({
+  body:              CreateUserDTO,
+  onValidationError: async (issues, req) => {
+    // Fire analytics, increment counters, log to external service
+    analytics.track('validation_failed', {
+      endpoint:  req.path,
+      fields:    issues.map(i => i.field),
+      requestId: req.id,
+    })
+  },
+})
+```
+
+Fires for body, params, query, and headers failures. Errors thrown from the hook are silently swallowed — they never affect the response.
+
+---
+
+## Extra content types — `extraContentTypes` <a name="extra-content-types"></a>
+
+```ts
+// Allow JSON:API content type
+app.use(express.json({ type: ['application/json', 'application/vnd.api+json'] }))
+app.use(shapeguard({
+  validation: {
+    extraContentTypes: ['application/vnd.api+json'],
+  }
+}))
+
+// Disable content-type enforcement entirely (for webhooks, raw upload routes)
+const WebhookRoute = defineRoute({
+  sanitize: { skipContentTypeCheck: true },
+})
+```
+
+---
+
 ## Per-route cache hints — `cache` <a name="cache"></a>
 
 > Sets `Cache-Control` response header automatically

@@ -18,18 +18,22 @@ function makeReq(overrides: Partial<Request> = {}): Request {
 function makeRes() {
   let statusCode = 200
   let body: unknown = null
+  const headers: Record<string, string> = {}
   const res = {
     headersSent: false,
     status(code: number) { statusCode = code; return this },
     json(b: unknown)     { body = b; return this },
-    get statusCode()     { return statusCode },
-    get body()           { return body },
+    setHeader(k: string, v: string) { headers[k] = v; return this },
+    getHeader(k: string)  { return headers[k] },
+    get statusCode()      { return statusCode },
+    get body()            { return body },
+    get headers()         { return headers },
     // Express internals used by errorHandler
     once(_evt: string, _fn: () => void) { return this },
     on(_evt: string, _fn: () => void)   { return this },
     removeListener(_evt: string, _fn: () => void) { return this },
   }
-  return res as unknown as Response & { statusCode: number; body: unknown }
+  return res as unknown as Response & { statusCode: number; body: unknown; headers: Record<string, string> }
 }
 
 const next = vi.fn() as unknown as NextFunction
@@ -109,21 +113,28 @@ describe('errorHandler', () => {
   })
 
   describe('onError hook', () => {
-    it('calls onError hook', () => {
+    it('calls onError hook with ErrorContext', async () => {
       const onError = vi.fn()
       const handler = errorHandler({ debug: false, errors: { onError } })
       const err = AppError.notFound()
       const res = makeRes()
       handler(err, makeReq(), res, next)
-      expect(onError).toHaveBeenCalledWith(expect.any(AppError), expect.anything())
+      // onError is async fire-and-forget — wait for microtasks
+      await new Promise(r => setTimeout(r, 10))
+      expect(onError).toHaveBeenCalledWith(expect.objectContaining({
+        err:           expect.any(AppError),
+        statusCode:    404,
+        isOperational: true,
+      }))
     })
 
-    it('does not crash if onError throws', () => {
+    it('does not crash if onError throws', async () => {
       const onError = vi.fn(() => { throw new Error('hook crashed') })
       const handler = errorHandler({ debug: false, errors: { onError } })
       const err = AppError.notFound()
       const res = makeRes()
       expect(() => handler(err, makeReq(), res, next)).not.toThrow()
+      await new Promise(r => setTimeout(r, 10))
     })
   })
 

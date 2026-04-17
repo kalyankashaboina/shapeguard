@@ -1,8 +1,57 @@
 # Migration Guide
 
+## v0.10.x → v0.11.0
+
+### Breaking changes
+None. v0.11.0 is fully backward-compatible with v0.10.x.
+
+### Recommended upgrades
+
+**1. Replace manual `AppError` destructuring in `res.fail()`**
+```ts
+// Before
+res.fail({ code: err.code, message: err.message, status: err.statusCode })
+
+// After — pass AppError directly
+res.fail(err)
+res.fail(AppError.notFound('User'))
+```
+
+**2. Use `AppError.fromFetch()` for downstream calls**
+```ts
+// Before
+const resp = await fetch(url)
+if (!resp.ok) throw new Error(`Upstream ${resp.status}`)
+
+// After — preserves status code, Sentry-friendly
+if (!resp.ok) throw await AppError.fromFetch(resp)
+```
+
+**3. Use `validateResponse()` in unit tests**
+```ts
+// Before — test response shape via HTTP
+const res = await supertest(app).get('/users/1')
+expect(res.body.password).toBeUndefined()
+
+// After — no HTTP needed
+const clean = await validateResponse(rawUser, UserResponseSchema)
+expect((clean as any).password).toBeUndefined()
+```
+
+**4. Set `rateLimit.trustProxy` explicitly if behind a proxy**
+```ts
+// Add trustProxy: true only when behind nginx/ALB/Cloudflare
+defineRoute({
+  rateLimit: { windowMs: 60_000, max: 100, trustProxy: true }
+})
+```
+
 ---
 
-## v0.9.x → v0.10.0
+
+---
+
+## v0.9.x → v0.11.0
 
 **No breaking changes.** All v0.9.x code works without modification.
 
