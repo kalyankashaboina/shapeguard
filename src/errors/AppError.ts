@@ -50,8 +50,17 @@ export class AppError extends Error {
   static forbidden(message = 'Access denied'): AppError {
     return new AppError(ErrorCode.FORBIDDEN, message, 403)
   }
+  static badRequest(message = 'Bad request', details?: Record<string, unknown>): AppError {
+    return new AppError('BAD_REQUEST', message, 400, details ?? null)
+  }
   static conflict(resource?: string): AppError {
     return new AppError(ErrorCode.CONFLICT, resource ? `${resource} already exists` : 'Resource already exists', 409)
+  }
+  static tooManyRequests(message = 'Too many requests', retryAfter?: number): AppError {
+    return new AppError(ErrorCode.RATE_LIMIT_EXCEEDED, message, 429, retryAfter ? { retryAfter } : null)
+  }
+  static serviceUnavailable(message = 'Service temporarily unavailable'): AppError {
+    return new AppError('SERVICE_UNAVAILABLE', message, 503)
   }
   static validation(details: ValidationIssue | ValidationIssue[]): AppError {
     // Store the full array when multiple issues are provided (allErrors:true),
@@ -65,6 +74,61 @@ export class AppError extends Error {
   static custom(code: string, message: string, status: number, details?: Record<string, unknown>): AppError {
     return new AppError(code, message, status, details ?? null)
   }
+
+  /**
+   * Create an AppError directly from an HTTP status code.
+   * Picks the most appropriate code and default message for the status.
+   *
+   * @example
+   * throw AppError.httpStatus(422, 'Email already in use')
+   * throw AppError.httpStatus(503)
+   */
+  static httpStatus(status: number, message?: string): AppError {
+    const HTTP_DEFAULTS: Record<number, [string, string]> = {
+      400: ['BAD_REQUEST',           'Bad request'],
+      401: [ErrorCode.UNAUTHORIZED,  'Authentication required'],
+      403: [ErrorCode.FORBIDDEN,     'Access denied'],
+      404: [ErrorCode.NOT_FOUND,     'Resource not found'],
+      405: [ErrorCode.METHOD_NOT_ALLOWED, 'Method not allowed'],
+      409: [ErrorCode.CONFLICT,      'Resource already exists'],
+      415: [ErrorCode.INVALID_CONTENT_TYPE, 'Unsupported media type'],
+      422: [ErrorCode.VALIDATION_ERROR, 'Validation failed'],
+      429: [ErrorCode.RATE_LIMIT_EXCEEDED, 'Too many requests'],
+      500: [ErrorCode.INTERNAL_ERROR, 'Internal server error'],
+      503: ['SERVICE_UNAVAILABLE',   'Service temporarily unavailable'],
+    }
+    const [code, defaultMsg] = HTTP_DEFAULTS[status] ?? [`HTTP_${status}`, `HTTP error ${status}`]
+    return new AppError(code, message ?? defaultMsg, status)
+  }
+
+  /**
+   * Type-narrowing guard for specific error codes.
+   * Use in catch blocks to handle errors by code without casting.
+   *
+   * @example
+   * try {
+   *   await UserService.create(body)
+   * } catch (err) {
+   *   if (AppError.is(err, 'CONFLICT')) {
+   *     return res.fail({ code: 'EMAIL_TAKEN', message: 'That email is already registered', status: 409 })
+   *   }
+   *   throw err  // re-throw everything else
+   * }
+   */
+  static is(err: unknown, code: string): err is AppError {
+    return isAppError(err) && (err as AppError).code === code
+  }
+
+  /**
+   * Check if an error has a specific HTTP status code.
+   *
+   * @example
+   * if (AppError.hasStatus(err, 404)) { ... }
+   */
+  static hasStatus(err: unknown, status: number): err is AppError {
+    return isAppError(err) && (err as AppError).statusCode === status
+  }
+
   static fromUnknown(err: unknown): AppError {
     if (isAppError(err)) return err
     if (err instanceof Error) {
@@ -96,6 +160,40 @@ export class AppError extends Error {
   ): (details?: TDetails, overrideMessage?: string) => AppError {
     return (details?: TDetails, overrideMessage?: string) =>
       new AppError(code, overrideMessage ?? message ?? code, status, details ?? null)
+  }
+
+  /**
+   * Wrap a failed downstream fetch() response as an AppError.
+   * Preserves the upstream status code so your API returns a meaningful error.
+   *
+   * @example
+   * const resp = await fetch('https://payments.api/charge', { ... })
+   * if (!resp.ok) throw await AppError.fromFetch(resp)
+   */
+  static async fromFetch(response: { status: number; statusText: string; text?: () => Promise<string> }): Promise<AppError> {
+    let body = ''
+    try { body = response.text ? await response.text() : '' } catch { /* ignore */ }
+    const HTTP_CODES: Record<number, string> = {
+      400: 'BAD_REQUEST', 401: 'UNAUTHORIZED', 403: 'FORBIDDEN',
+      404: 'NOT_FOUND', 409: 'CONFLICT', 422: 'VALIDATION_ERROR',
+      429: 'RATE_LIMIT_EXCEEDED', 500: 'INTERNAL_ERROR', 503: 'SERVICE_UNAVAILABLE',
+    }
+    const code = HTTP_CODES[response.status] ?? `HTTP_${response.status}`
+    return new AppError(code, body || response.statusText || `HTTP ${response.status}`, response.status, null, response.status < 500)
+  }
+
+  /**
+   * Attach extra context to this error — returns a new AppError with merged details.
+   * Useful when catching and re-throwing with additional information.
+   *
+   * @example
+   * throw AppError.notFound('User').withContext({ userId: req.params.id, requestedBy: req.user?.id })
+   */
+  withContext(extra: Record<string, unknown>): AppError {
+    const merged = this.details && typeof this.details === 'object' && !Array.isArray(this.details)
+      ? { ...(this.details as Record<string, unknown>), ...extra }
+      : extra
+    return new AppError(this.code, this.message, this.statusCode, merged, this.isOperational)
   }
 }
 

@@ -6,7 +6,7 @@ import { zodAdapter, isZodSchema } from '../../adapters/zod.js'
 // We duck-type so tests don't need zod installed in this env
 function makeSchema(parseResult: unknown, shouldFail = false) {
   return {
-    safeParseAsync: async (data: unknown) => {
+    safeParseAsync: async (_data: unknown) => {
       if (shouldFail) {
         return {
           success: false as const,
@@ -19,7 +19,7 @@ function makeSchema(parseResult: unknown, shouldFail = false) {
       }
       return { success: true as const, data: parseResult }
     },
-    parseAsync: async (data: unknown) => {
+    parseAsync: async (_data: unknown) => {
       if (shouldFail) throw new Error('Validation failed')
       return parseResult
     },

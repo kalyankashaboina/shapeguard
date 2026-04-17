@@ -4,7 +4,7 @@
 // No real joi/yup/winston installed — we use duck-typed mocks.
 // ═══════════════════════════════════════════════════════════════════════════
 
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import { z } from 'zod'
 
 // Import directly from source

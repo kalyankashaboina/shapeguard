@@ -19,12 +19,11 @@ export function getDataKey(shape?: Record<string, string>): string {
 }
 
 // Patches res.json() to strip unknown response fields.
-// BUG-M3 NOTE: strip() is async (Zod's safeParseAsync). This means res.json()
-// returns 'res' before the HTTP response is sent. Express treats the request as
-// handled once res.json() returns, so res.headersSent will be false until the
-// .then() fires. In practice this is safe for normal Express usage because no
-// middleware runs after the route handler, but any code that checks
-// res.headersSent synchronously after calling res.json() will see stale state.
+// ASYNC DESIGN NOTE: strip() uses Zod's safeParseAsync so res.json() must return
+// synchronously while the actual send is deferred to the microtask queue.
+// We set res.headersSent = true immediately via a non-enumerable property shadow
+// so that any code checking headersSent synchronously after res.json() sees the
+// correct state and doesn't attempt a double-send.
 export function patchResponseStrip(
   res:            Response,
   schema:         RouteSchema | ValidateOptions,
@@ -36,16 +35,19 @@ export function patchResponseStrip(
 
   if (!responseSchema) return
 
-  const dataKey     = getDataKey(responseConfig?.shape)
+  const dataKey      = getDataKey(responseConfig?.shape)
   const originalJson = res.json.bind(res)
 
   res.json = function patchedJson(body: unknown) {
     if (body !== null && typeof body === 'object' && dataKey in (body as object)) {
       const envelope = { ...(body as Record<string, unknown>) }
 
+      // Shadow headersSent immediately so synchronous callers see the right value.
+      // This prevents double-send if code checks headersSent after calling res.json().
+      Object.defineProperty(res, 'headersSent', { value: true, configurable: true })
+
       responseSchema.strip(envelope[dataKey])
         .then((stripped: unknown) => {
-          if (res.headersSent) return
           envelope[dataKey] = stripped
           originalJson(envelope)
         })

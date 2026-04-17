@@ -34,6 +34,19 @@ export function injectResHelpers(config: ResponseConfig = {}): RequestHandler {
     }
     res.paginated = function(opts: ResPaginatedOpts): void {
       if (res.headersSent) return
+
+      // RFC 8288 Link header — enables clients to navigate without parsing the body
+      if (opts.baseUrl) {
+        const totalPages = opts.limit > 0 ? Math.ceil(opts.total / opts.limit) : 1
+        const links: string[] = []
+        const url = (p: number) => `<${opts.baseUrl}?page=${p}&limit=${opts.limit}>`
+        if (opts.page > 1)           links.push(`${url(1)}; rel="first"`)
+        if (opts.page > 1)           links.push(`${url(opts.page - 1)}; rel="prev"`)
+        if (opts.page < totalPages)  links.push(`${url(opts.page + 1)}; rel="next"`)
+        if (totalPages > 1)          links.push(`${url(totalPages)}; rel="last"`)
+        if (links.length > 0)        res.setHeader('Link', links.join(', '))
+      }
+
       res.status(200).json(buildPaginated(opts.data, opts.total, opts.page, opts.limit, opts.message ?? '', config))
     }
     // Cursor-based pagination — enterprise pattern for large datasets and infinite scroll.
@@ -49,9 +62,18 @@ export function injectResHelpers(config: ResponseConfig = {}): RequestHandler {
       }
       res.status(200).json(buildSuccess(payload, opts.message ?? '', config))
     }
-    res.fail = function(opts: ResFailOpts): void {
+    res.fail = function(opts: ResFailOpts | import('../errors/AppError.js').AppError): void {
       if (res.headersSent) return
-      res.status(opts.status ?? 400).json(buildError(opts.code, opts.message, (opts.details as never) ?? null, false, config))
+      // Accept AppError directly: res.fail(AppError.notFound('User'))
+      const isAppErr = typeof opts === 'object' && opts !== null && (opts as { isAppError?: boolean })['isAppError'] === true
+      if (isAppErr) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const ae = opts as any
+        res.status(ae.statusCode).json(buildError(ae.code, ae.message, ae.details as never, false, config))
+        return
+      }
+      const o = opts as ResFailOpts
+      res.status(o.status ?? 400).json(buildError(o.code, o.message, (o.details as never) ?? null, false, config))
     }
 
     next()

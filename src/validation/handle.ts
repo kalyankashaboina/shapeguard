@@ -27,12 +27,20 @@ type AsyncRouteHandler = (req: Request, res: Response, next: NextFunction) => Pr
  *
  * Spread into router exactly the same way:
  *   router.post('/', ...createUser)
+ *
+ * The returned array has a `cleanup()` method for stopping the rate-limit
+ * store interval in tests or when the route is deregistered:
+ *   const route = handle(CreateUserRoute, handler)
+ *   // later:
+ *   route.cleanup()
  */
 export function handle(
   schema:  RouteSchema | ValidateOptions,
   handler: AsyncRouteHandler,
-): RequestHandler[] {
+): RequestHandler[] & { cleanup: () => void } {
   const validateMiddleware = validate(schema)
-
-  return [validateMiddleware, asyncHandler(handler as (req: Request, res: Response, next: NextFunction) => Promise<void>)]
+  const middlewares        = [validateMiddleware, asyncHandler(handler as (req: Request, res: Response, next: NextFunction) => Promise<void>)]
+  const result             = middlewares as RequestHandler[] & { cleanup: () => void }
+  result.cleanup = () => validateMiddleware.cleanup()
+  return result
 }

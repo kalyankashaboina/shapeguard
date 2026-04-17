@@ -88,16 +88,33 @@ export function gracefulShutdown(
   } = options
 
   let isShuttingDown = false
+  let inflight       = 0
+
+  // Track in-flight requests so onDrained is called at the right moment
+  // and logs report the actual count during drain.
+  // Guard: both 'finish' and 'close' fire on keep-alive connections — use a
+  // flag to ensure we decrement exactly once per request.
+  server.on('request', (_req, res) => {
+    inflight++
+    let counted = true
+    const dec = () => {
+      if (!counted) return
+      counted = false
+      inflight--
+    }
+    res.once('finish', dec)
+    res.once('close',  dec)
+  })
 
   async function shutdown(signal: string): Promise<void> {
     if (isShuttingDown) return
     isShuttingDown = true
 
-    logger!.info({ signal, drainMs }, `[shapeguard] Shutdown signal received — draining (${drainMs}ms max)`)
+    logger!.info({ signal, drainMs, inflight }, `[shapeguard] Shutdown signal received — draining (${drainMs}ms max)`)
 
     // Stop accepting new connections
     server.close(async () => {
-      logger!.info({}, '[shapeguard] HTTP server closed — no new connections accepted')
+      logger!.info({ inflight }, '[shapeguard] HTTP server closed — no new connections accepted')
       if (onDrained) {
         try { onDrained() }
         catch (e) { logger!.warn({ error: String(e) }, '[shapeguard] onDrained hook threw') }
@@ -106,7 +123,7 @@ export function gracefulShutdown(
 
     // Force-close if drain takes too long
     const forceTimer = setTimeout(() => {
-      logger!.warn({ drainMs }, '[shapeguard] Drain timeout — forcing server close')
+      logger!.warn({ drainMs, inflight }, '[shapeguard] Drain timeout — forcing server close')
       server.closeAllConnections?.()
     }, drainMs).unref()
 
@@ -124,7 +141,7 @@ export function gracefulShutdown(
 
     // Hard exit after forceExitMs to cover lingering async work
     setTimeout(() => {
-      logger!.warn({ forceExitMs }, '[shapeguard] Force exit after timeout')
+      logger!.warn({ forceExitMs, inflight }, '[shapeguard] Force exit after timeout')
       process.exit(0)
     }, forceExitMs).unref()
   }

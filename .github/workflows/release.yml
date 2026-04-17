@@ -123,9 +123,8 @@ jobs:
         run: |
           MAIN=$(wc -c < dist/index.mjs)
           echo "Main ESM bundle: ${MAIN} bytes (limit: 51200)"
-          echo "Main ESM bundle: ${MAIN} bytes (limit: 81920)"
-          if [ "$MAIN" -gt 81920 ]; then
-            echo "❌  Bundle size regression: ${MAIN} bytes > 80KB limit"
+          if [ "$MAIN" -gt 51200 ]; then
+            echo "❌  Bundle size regression: ${MAIN} bytes > 50KB limit"
             exit 1
           fi
           echo "✅  Bundle size OK"

@@ -19,6 +19,7 @@ export function shapeguard(config: ShapeguardConfig = {}): RequestHandler {
     response:   responseConfig   = {},
     validation: validationConfig = {},
     requestId:  requestIdConfig  = {},
+    timeout:    globalTimeout,
     debug:      _debug           = isDev,
   } = config
 
@@ -71,6 +72,25 @@ export function shapeguard(config: ShapeguardConfig = {}): RequestHandler {
     // ── X-Request-Id response header ────────────────────────────────────
     if (responseConfig.includeRequestId && req.id) {
       res.setHeader('X-Request-Id', req.id)
+    }
+
+    // ── Global request timeout ───────────────────────────────────────────
+    // Applied to every route. Per-route timeout in defineRoute({ timeout })
+    // overrides this when both are set. Capped at 10 minutes.
+    const MAX_TIMEOUT_MS = 600_000
+    if (globalTimeout && globalTimeout > 0) {
+      const timeoutMs = Math.min(globalTimeout, MAX_TIMEOUT_MS)
+      const timer = setTimeout(() => {
+        if (!res.headersSent) {
+          res.status(408).json({
+            success: false,
+            message: `Request timed out after ${timeoutMs}ms`,
+            error:   { code: 'REQUEST_TIMEOUT', message: `Request timed out after ${timeoutMs}ms`, details: null },
+          })
+        }
+      }, timeoutMs)
+      res.once('finish', () => clearTimeout(timer))
+      res.once('close',  () => clearTimeout(timer))
     }
 
     resHelpers(req, res, () => {

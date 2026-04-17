@@ -111,6 +111,12 @@ export interface WebhookConfig {
   encoding?:       'hex' | 'base64'
   toleranceSecs?:  number
   /**
+   * Maximum allowed raw body size in bytes before signature verification.
+   * Prevents memory exhaustion when express.raw() is configured without a limit.
+   * Default: 1_048_576 (1 MB). Set to 0 to disable the check.
+   */
+  maxBodyBytes?:   number
+  /**
    * Delivery-ID deduplication — prevents replay attacks for providers
    * that don't use timestamps (GitHub sends x-github-delivery UUID).
    * Pass inMemoryDeduplicator() for single-process, or a Redis-backed
@@ -136,11 +142,19 @@ export function verifyWebhook(config: WebhookConfig): RequestHandler {
   const encoding   = config.encoding   ?? preset?.encoding   ?? 'hex'
   const tolerance  = config.toleranceSecs ?? preset?.toleranceSecs ?? 300
 
+  const maxBodyBytes = config.maxBodyBytes ?? 1_048_576  // 1 MB default
+
   return async function webhookVerifier(req: Request, _res: Response, next: NextFunction): Promise<void> {
     try {
       // Get raw body — works with express.raw(), express.json(), or text bodies
       let rawBody: string
-      if (Buffer.isBuffer(req.body))   rawBody = req.body.toString('utf8')
+      if (Buffer.isBuffer(req.body)) {
+        if (maxBodyBytes > 0 && req.body.length > maxBodyBytes) {
+          throw new AppError('WEBHOOK_BODY_TOO_LARGE',
+            `Webhook body exceeds ${maxBodyBytes} bytes`, 413)
+        }
+        rawBody = req.body.toString('utf8')
+      }
       else if (typeof req.body === 'string') rawBody = req.body
       else if (req.body !== undefined) rawBody = JSON.stringify(req.body)
       else                             rawBody = ''

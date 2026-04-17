@@ -4,16 +4,16 @@
 // Real-world scenarios: CRUD API, auth, file upload, pagination, legacy errors.
 // ═══════════════════════════════════════════════════════════════════════════
 
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import express, { type Request, type Response } from 'express'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
+import express from 'express'
 import supertest from 'supertest'
 
 // ── Internal modules ──────────────────────────
 import { AppError, isAppError }           from '../errors/AppError.js'
 import { errorHandler }                   from '../errors/error-handler.js'
 import { notFoundHandler, asyncHandler }  from '../errors/not-found.js'
-import { runPreParse, checkDepth, checkArrayLengths, checkStringLengths,
-         sanitizeStrings, enforceContentType, DEFAULT_LIMITS } from '../core/pre-parse.js'
+import { runPreParse, checkDepth as _checkDepth, checkArrayLengths as _checkArrayLengths, checkStringLengths as _checkStringLengths,
+         sanitizeStrings as _sanitizeStrings, enforceContentType, DEFAULT_LIMITS } from '../core/pre-parse.js'
 import { generateRequestId }              from '../core/request-id.js'
 import { buildSuccess, buildError, buildPaginated, deepFreeze, detectCircular } from '../core/response.js'
 import { sanitizeValidationIssue }        from '../validation/sanitize.js'

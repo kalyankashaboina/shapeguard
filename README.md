@@ -332,6 +332,8 @@ defineRoute({
 
 Built-in rate limiter uses a fixed-window in-memory store. For distributed deployments, pass `rateLimit.store` with a Redis-compatible interface.
 
+> **Security:** By default, rate limiting uses `socket.remoteAddress` for the client IP. If you are behind a trusted reverse proxy (nginx, AWS ALB, Cloudflare), set `trustProxy: true` to read from `x-forwarded-for`. Never set `trustProxy: true` without an actual proxy — attackers can spoof any IP and bypass rate limiting entirely.
+
 ### Security defaults (always active)
 
 | Threat | Default protection |
@@ -461,7 +463,7 @@ defineRoute({ body: yupAdapter(yup.object({ email: yup.string().email() })) })
 | `shapeguard/testing` | ~2 KB | ~1 KB |
 | `shapeguard/adapters/*` | <1 KB | <1 KB |
 
-> Sizes measured at v0.10.0. All entry points have `"sideEffects": false` — tree-shaking removes features you don't import. The full gzip budget is monitored in CI; PRs that exceed 25 KB gzip on the core entry point are blocked.
+> Sizes measured at v0.11.0. All entry points have `"sideEffects": false` — tree-shaking removes features you don't import. The full gzip budget is monitored in CI; PRs that exceed 25 KB gzip on the core entry point are blocked.
 
 `"sideEffects": false` — unused exports are tree-shaken automatically.
 

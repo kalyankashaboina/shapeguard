@@ -342,7 +342,7 @@ describe('withShape — undefined token warning (Bug 12)', () => {
     return {} as unknown as Request
   }
 
-  function makeRes(body: unknown) {
+  function makeRes(_body: unknown) {
     let captured: unknown
     const res = {
       headersSent: false,
@@ -386,7 +386,7 @@ describe('withShape — undefined token warning (Bug 12)', () => {
 // Bug 13: Two shapeguard() instances do not share config
 // ─────────────────────────────────────────────────────────────────────────────
 describe('shapeguard() — two instances do not share config (Bug 13)', () => {
-  function makeReqRes(validationConfig: Record<string, unknown>) {
+  function makeReqRes(_validationConfig: Record<string, unknown>) {
     const req = {
       headers: {}, method: 'GET', path: '/', id: 'x',
     } as unknown as Request
@@ -504,7 +504,7 @@ function makeFullReq(overrides: Record<string, unknown> = {}) {
   } as any
 }
 
-function makeSimpleRes(statusCode = 200) {
+function _makeSimpleRes(statusCode = 200) {
   const handlers: Record<string, Function> = {}
   return {
     statusCode,

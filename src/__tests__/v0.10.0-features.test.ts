@@ -8,13 +8,13 @@
 // These tests hit a real Express server with real HTTP requests via supertest.
 // No mocking of the features under test.
 
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
+import { describe, it, expect, beforeEach, vi } from 'vitest'
 import express from 'express'
 import supertest from 'supertest'
 import { createHmac } from 'crypto'
 import {
-  shapeguard, defineRoute, handle, createDTO,
-  AppError, errorHandler, notFoundHandler,
+  shapeguard, defineRoute, handle,
+  errorHandler, notFoundHandler,
   healthCheck, gracefulShutdown,
   verifyWebhook, inMemoryDeduplicator,
   resetLoggerForTesting, configureLogger,
@@ -22,7 +22,6 @@ import {
 } from '../index.js'
 import { createRouter } from '../router/create-router.js'
 import { generateOpenAPI } from '../openapi/index.js'
-import { z } from 'zod'
 
 // ── Shared: silence logger in tests ─────────────────────────────────────────
 beforeEach(() => {

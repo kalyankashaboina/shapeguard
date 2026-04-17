@@ -1,6 +1,6 @@
 // src/__tests__/integration.test.ts
 // End-to-end integration — full request lifecycle without HTTP
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect } from 'vitest'
 import { AppError, isAppError } from '../errors/AppError.js'
 import { ErrorCode } from '../types/index.js'
 import { buildSuccess, buildError } from '../core/response.js'

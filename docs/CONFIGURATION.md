@@ -339,6 +339,196 @@ with wrong HTTP method. Works with parameterized routes like `/:id`.
 
 ---
 
+
+---
+
+## Middleware composition — `pipe()` <a name="pipe"></a>
+
+`pipe()` flattens multiple middleware into a single array, executed left-to-right.
+Use it to compose reusable guard stacks that can be shared across routes.
+
+```ts
+import { pipe, handle, defineRoute } from 'shapeguard'
+
+// Build a reusable auth + rate-limit guard
+const apiGuard = pipe(
+  requireBearerToken,               // your auth middleware
+  validate(defineRoute({            // shared rate limit
+    rateLimit: { windowMs: 60_000, max: 100 },
+  })),
+)
+
+// Apply to every route without repeating
+router.get('/users',    ...handle(pipe(apiGuard, ListUsersRoute),   listUsers))
+router.post('/users',   ...handle(pipe(apiGuard, CreateUserRoute),  createUser))
+router.delete('/orders',...handle(pipe(apiGuard, DeleteOrderRoute), deleteOrder))
+```
+
+`pipe()` flattens nested arrays, so spreading `handle()` output works correctly.
+
+---
+
+## Route groups — `defineGroup()` <a name="definegroup"></a>
+
+Co-locate related routes with a shared prefix and middleware stack.
+
+```ts
+import { defineGroup, handle, defineRoute } from 'shapeguard'
+
+export const usersGroup = defineGroup('/users', {
+  // Applied to every route in the group
+  middleware: [requireBearerToken, requireRole('admin')],
+
+  routes: (r) => {
+    r.get('/',    ...handle(ListUsersRoute,  listUsers))
+    r.post('/',   ...handle(CreateUserRoute, createUser))
+    r.get('/:id', ...handle(GetUserRoute,    getUser))
+    r.put('/:id', ...handle(UpdateUserRoute, updateUser))
+    r.delete('/:id', ...handle(DeleteUserRoute, deleteUser))
+  },
+})
+
+// In app.ts
+app.use(usersGroup)
+app.use(postsGroup)
+app.use(authGroup)
+```
+
+Benefits over raw `express.Router()`:
+- Middleware declared once, guaranteed before all routes
+- Routes use shapeguard's `createRouter()` — 405 Method Not Allowed automatic
+- Flat readable structure, no nested `app.use()` chains
+
+---
+
+## Per-request context store — `setContext / getContext` <a name="context"></a>
+
+Pass typed data between middleware without monkey-patching `req` properties.
+
+```ts
+import { setContext, getContext, requireContext, contextMiddleware } from 'shapeguard'
+
+// In auth middleware — set after verifying JWT
+app.use(async (req, _res, next) => {
+  const token = req.headers.authorization?.slice(7)
+  const user  = token ? await verifyJWT(token) : null
+  if (user) setContext(req, 'user', user)
+  next()
+})
+
+// In route handler — read with full type safety
+app.get('/profile', async (req, res) => {
+  const user = requireContext<AuthUser>(req, 'user')  // throws 500 if missing
+  res.ok({ data: user, message: '' })
+})
+
+// Or use contextMiddleware() for static values
+app.use(contextMiddleware('config', loadedAppConfig))
+app.use(contextMiddleware('version', '2024-01'))
+
+// getContext() returns undefined if not set
+const user = getContext<AuthUser>(req, 'user')
+if (!user) throw AppError.unauthorized()
+```
+
+Context is isolated per request — no cross-request leakage.
+
+---
+
+## Circuit breaker — `circuitBreaker()` <a name="circuit-breaker"></a>
+
+Protect your API from cascading failures when an external dependency is down.
+
+```ts
+import { circuitBreaker, CircuitOpenError } from 'shapeguard'
+
+const stripe = circuitBreaker({
+  name:         'stripe',
+  threshold:    3,            // open after 3 consecutive failures
+  resetTimeout: 60_000,       // try to recover after 60s
+  onOpen:   (name) => Sentry.captureMessage(`Circuit ${name} opened`),
+  onClose:  (name) => logger.info({}, `Circuit ${name} recovered`),
+  onFailure:(name, err) => metrics.increment('stripe.error'),
+})
+
+// In your route handler
+app.post('/checkout', ...handle(CheckoutRoute, async (req, res) => {
+  try {
+    const charge = await stripe.call(() =>
+      stripeClient.charges.create({ amount: req.body.amount, currency: 'usd' })
+    )
+    res.created({ data: charge, message: 'Payment processed' })
+  } catch (err) {
+    if (err instanceof CircuitOpenError) {
+      throw AppError.serviceUnavailable('Payment service temporarily unavailable')
+    }
+    throw err
+  }
+}))
+
+// Wire into health check automatically
+app.use('/health', healthCheck({
+  checks:      { stripe: stripe.probe, db: db.probe },
+  nonCritical: ['stripe'],  // degraded, not unhealthy, if Stripe is down
+}))
+```
+
+States: `CLOSED` (normal) → `OPEN` (failing fast) → `HALF_OPEN` (testing recovery) → `CLOSED`.
+
+---
+
+## Server-Sent Events — `sseStream()` <a name="sse"></a>
+
+Real-time streaming without WebSockets — simpler, HTTP/1.1 compatible, resumable.
+
+```ts
+import { sseStream, onClientDisconnect, enableSSE } from 'shapeguard'
+
+app.get('/live-prices', enableSSE, (req, res) => {
+  const stream = sseStream<{ symbol: string; price: number }>(res)
+
+  // Send typed events
+  const priceInterval = setInterval(() => {
+    if (stream.closed) { clearInterval(priceInterval); return }
+    stream.send({ type: 'price', data: { symbol: 'AAPL', price: getPrice('AAPL') } })
+  }, 1_000)
+
+  // Keep-alive heartbeat every 20s (prevents proxy timeouts)
+  const hbInterval = setInterval(() => {
+    if (!stream.closed) stream.heartbeat()
+  }, 20_000)
+
+  // Clean up when client disconnects
+  onClientDisconnect(req, stream, () => {
+    clearInterval(priceInterval)
+    clearInterval(hbInterval)
+  })
+})
+```
+
+`sseStream()` sets all required headers automatically:
+- `Content-Type: text/event-stream`
+- `Cache-Control: no-cache, no-transform`  
+- `X-Accel-Buffering: no` (disables nginx response buffering)
+
+Events are typed — `stream.send()` enforces your `SSEEvent<T>` type.
+
+---
+
+## Validation configuration — extra content types <a name="extra-content-types"></a>
+
+```ts
+// Allow non-standard MIME types (JSON:API, GraphQL, vendor types)
+app.use(shapeguard({
+  validation: {
+    extraContentTypes: ['application/vnd.api+json', 'application/graphql'],
+    skipContentTypeCheck: false,  // set true to disable enforcement entirely
+  }
+}))
+```
+
+---
+
 ## Quick reference table <a name="reference"></a>
 
 ### shapeguard() — requestId options

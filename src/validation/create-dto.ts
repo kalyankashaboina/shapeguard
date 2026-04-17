@@ -25,14 +25,24 @@ import type { SchemaAdapter, SafeParseResult, ZodLike } from '../types/index.js'
 export function createDTO<TSchema extends ZodLike<TOutput>, TOutput = InferZod<TSchema>>(
   schema: TSchema,
 ): DTOResult<TOutput> {
-  if (!isZodSchema(schema)) {
+  // If a pre-built adapter (joiAdapter, yupAdapter) is passed, use it directly
+  // This allows createDTO to work with any schema library, not just Zod
+  const isPreBuiltAdapter = (
+    typeof schema === 'object' && schema !== null &&
+    typeof (schema as Record<string, unknown>)['safeParse'] === 'function' &&
+    typeof (schema as Record<string, unknown>)['library'] === 'string'
+  )
+
+  if (!isZodSchema(schema) && !isPreBuiltAdapter) {
     throw new Error(
-      '[shapeguard] createDTO() requires a Zod schema. ' +
-      'Pass a z.object({ ... }) as the argument.',
+      '[shapeguard] createDTO() requires a Zod schema or a SchemaAdapter (joiAdapter, yupAdapter). ' +
+      'Pass a z.object({ ... }) or joiAdapter(schema) as the argument.',
     )
   }
 
-  const adapter = zodAdapter(schema) as SchemaAdapter<TOutput>
+  const adapter = isPreBuiltAdapter
+    ? (schema as unknown as SchemaAdapter<TOutput>)
+    : zodAdapter(schema as ZodLike<TOutput>) as SchemaAdapter<TOutput>
 
   const dto: DTOResult<TOutput> = {
     // SchemaAdapter interface — pass DTO directly to defineRoute()
