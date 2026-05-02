@@ -1,142 +1,39 @@
 {
-  "name": "shapeguard",
-  "version": "0.10.0",
-  "description": "FastAPI-style validation, response shaping, and error handling for Node.js + Express",
-  "author": "Kalyan Kashaboina <kalyankashaboina07@gmail.com> (https://github.com/kalyankashaboina)",
-  "license": "MIT",
-  "type": "module",
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/kalyankashaboina/shapeguard.git"
-  },
-  "homepage": "https://www.npmjs.com/package/shapeguard",
-  "bugs": {
-    "url": "https://github.com/kalyankashaboina/shapeguard/issues"
-  },
-  "exports": {
-    ".": {
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.mjs",
-      "require": "./dist/index.cjs"
-    },
-    "./adapters/joi": {
-      "types": "./dist/adapters/joi.d.ts",
-      "import": "./dist/adapters/joi.mjs",
-      "require": "./dist/adapters/joi.cjs"
-    },
-    "./adapters/yup": {
-      "types": "./dist/adapters/yup.d.ts",
-      "import": "./dist/adapters/yup.mjs",
-      "require": "./dist/adapters/yup.cjs"
-    },
-    "./adapters/winston": {
-      "types": "./dist/adapters/winston.d.ts",
-      "import": "./dist/adapters/winston.mjs",
-      "require": "./dist/adapters/winston.cjs"
-    },
-    "./testing": {
-      "types": "./dist/testing/index.d.ts",
-      "import": "./dist/testing/index.mjs",
-      "require": "./dist/testing/index.cjs"
-    },
-    "./openapi": {
-      "types": "./dist/openapi/index.d.ts",
-      "import": "./dist/openapi/index.mjs",
-      "require": "./dist/openapi/index.cjs"
-    }
-  },
-  "main": "./dist/index.cjs",
-  "module": "./dist/index.mjs",
-  "types": "./dist/index.d.ts",
-  "files": [
-    "dist",
-    "README.md",
-    "CHANGELOG.md",
-    "MIGRATION.md",
-    "LICENSE",
-    "docs",
-    "SECURITY.md"
+  "name": "shapeguard-workspace",
+  "private": true,
+  "workspaces": [
+    "packages/*",
+    "examples/*",
+    "website"
   ],
-  "sideEffects": false,
   "scripts": {
-    "build": "tsup",
-    "build:watch": "tsup --watch",
-    "build:analyze": "tsup --metafile && npx esbuild-visualizer --metadata dist/metafile-esm.json",
-    "test": "vitest run",
-    "test:watch": "vitest",
-    "test:coverage": "vitest run --coverage",
-    "lint": "eslint src --ext .ts",
-    "typecheck": "tsc --noEmit",
-    "size": "npm run build && node scripts/size.mjs",
-    "prepublishOnly": "npm run build && npm test",
-    "docker:build": "docker build -f docker/Dockerfile -t shapeguard-example .",
-    "docker:up": "docker compose -f docker/docker-compose.yml up",
-    "docker:up:bg": "docker compose -f docker/docker-compose.yml up -d",
-    "docker:down": "docker compose -f docker/docker-compose.yml down",
-    "docker:logs": "docker compose -f docker/docker-compose.yml logs -f app",
-    "docker:tools": "docker compose -f docker/docker-compose.yml --profile tools up",
-    "docker:clean": "docker compose -f docker/docker-compose.yml down -v --rmi local",
-    "validate": "node scripts/validate.mjs"
-  },
-  "dependencies": {},
-  "peerDependencies": {
-    "express": ">=4.0.0",
-    "zod": ">=3.0.0"
-  },
-  "peerDependenciesMeta": {
-    "express": {
-      "optional": false
-    },
-    "zod": {
-      "optional": false
-    },
-    "pino": {
-      "optional": true
-    },
-    "pino-pretty": {
-      "optional": true
-    }
-  },
-  "optionalDependencies": {
-    "pino": ">=8.0.0",
-    "pino-pretty": ">=11.0.0",
-    "joi": ">=17.0.0",
-    "yup": ">=1.0.0",
-    "winston": ">=3.0.0"
+    "build":        "npm run build        --workspace=packages/shapeguard",
+    "test":         "npm run test         --workspace=packages/shapeguard",
+    "test:coverage": "npm run test:coverage --workspace=packages/shapeguard",
+    "typecheck":    "npm run typecheck    --workspace=packages/shapeguard",
+    "lint":         "npm run lint         --workspace=packages/shapeguard",
+    "validate":     "npm run validate     --workspace=packages/shapeguard",
+    "size":         "npm run size         --workspace=packages/shapeguard",
+
+    "examples:typecheck": "npm run typecheck --workspaces --if-present",
+    "examples:test":      "npm run test      --workspaces --if-present",
+    "examples:check":     "npm run check     --workspaces --if-present",
+
+    "website:dev":   "npm run start --workspace=website",
+    "website:build": "npm run build --workspace=website",
+
+    "ci:lib":      "npm run typecheck && npm run lint && npm run test && npm run build",
+    "ci:examples": "npm run examples:check",
+    "ci:all":      "npm run ci:lib && npm run ci:examples",
+
+    "check-all": "node scripts/check-examples.mjs"
   },
   "devDependencies": {
-    "@types/express": "^4.17.21",
-    "@types/node": "^20.0.0",
-    "@types/supertest": "^6.0.2",
-    "express": "^4.18.3",
-    "pino": "^8.19.0",
-    "pino-pretty": "^11.0.0",
-    "supertest": "^7.0.0",
-    "tsup": "^8.0.2",
-    "typescript": "^5.4.0",
-    "vitest": "^1.4.0",
-    "zod": "^3.22.4",
-    "@vitest/coverage-v8": "^1.4.0",
-    "@typescript-eslint/eslint-plugin": "^8.0.0",
-    "@typescript-eslint/parser": "^8.0.0",
-    "eslint": "^9.0.0"
+    "typescript":      "^5.4.0",
+    "tsx":             "^4.0.0",
+    "@types/node":     "^20.0.0",
+    "@types/express":  "^4.17.21"
   },
-  "keywords": [
-    "express",
-    "validation",
-    "middleware",
-    "zod",
-    "error-handling",
-    "fastapi",
-    "typescript",
-    "nodejs",
-    "response",
-    "shapeguard",
-    "logging",
-    "security",
-    "pino",
-    "api"
-  ],
   "engines": {
     "node": ">=18.0.0"
   }

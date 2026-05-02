@@ -1,0 +1,17 @@
+{
+  "name": "shapeguard-example-08-production-setup",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Production patterns: healthCheck, gracefulShutdown, request timeout, webhook dedup",
+  "type": "module",
+  "scripts": {
+    "dev":   "tsx watch src/index.ts",
+    "start": "tsx src/index.ts",
+    "check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "express":    "^4.18.3",
+    "shapeguard": "*",
+    "zod":        "^3.22.4"
+  }
+}

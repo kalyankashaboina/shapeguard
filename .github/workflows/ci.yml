@@ -1,16 +1,12 @@
 # ─────────────────────────────────────────────────────────────────────────────
-# ci.yml — shapeguard Continuous Integration
+# ci.yml — shapeguard CI (monorepo)
 #
-# Runs on every push to main and every PR targeting main.
-# ALL steps must pass — no deployment runs if this fails.
-#
-# Node matrix: 18.x / 20.x / 22.x
 # Jobs:
-#   test    — typecheck → lint → tests → coverage → build → bundle guard
-#   audit   — npm audit for critical vulnerabilities
-#   website — build Docusaurus website (ensures docs don't break on publish)
+#   lib      — typecheck → lint (enforced) → tests → coverage → build → bundle guard
+#   examples — node scripts/check-examples.mjs  (all 8 from root, no cd)
+#   audit    — npm audit --audit-level=critical
+#   website  — Docusaurus build
 # ─────────────────────────────────────────────────────────────────────────────
-
 name: CI
 
 on:
@@ -28,101 +24,109 @@ permissions:
   contents: read
 
 jobs:
-  # ── Library quality gate ─────────────────────────────────────────────────────
-  test:
-    name: Test (Node ${{ matrix.node-version }})
+  lib:
+    name: Library (Node ${{ matrix.node-version }})
     runs-on: ubuntu-latest
     timeout-minutes: 15
     if: github.event.pull_request.draft != true
-
     strategy:
       fail-fast: false
       matrix:
         node-version: [18.x, 20.x, 22.x]
-
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node-version }}
           cache: npm
 
-      - name: Install dependencies
+      - name: Install dependencies (single root install)
         run: npm ci
 
-      - name: TypeScript type check
-        run: npm run typecheck
+      - name: TypeScript typecheck
+        run: npm run typecheck --workspace=packages/shapeguard
 
-      - name: Lint
-        run: npm run lint || true
-        # ESLint newly added — reports issues but doesn't block CI until baseline is clean
-        # Remove "|| true" once all existing lint warnings are addressed
+      - name: Lint (enforced — no || true)
+        run: npm run lint --workspace=packages/shapeguard
 
       - name: Run tests
-        run: npm test
+        run: npm run test --workspace=packages/shapeguard
 
-      - name: Collect coverage (Node 20 only)
+      - name: Coverage (Node 20 only)
         if: matrix.node-version == '20.x'
-        run: npm run test:coverage
+        run: npm run test:coverage --workspace=packages/shapeguard
 
-      - name: Upload coverage to Codecov
+      - name: Upload coverage
         if: matrix.node-version == '20.x'
         uses: codecov/codecov-action@v4
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
-          files: ./coverage/lcov.info
+          files: ./packages/shapeguard/coverage/lcov.info
           fail_ci_if_error: false
         continue-on-error: true
 
-      - name: Build library
-        run: npm run build
+      - name: Build
+        run: npm run build --workspace=packages/shapeguard
 
-      - name: Bundle size guard (Node 20 only)
+      - name: Bundle size guard (Node 20)
         if: matrix.node-version == '20.x'
         run: |
-          RAW=$(wc -c < dist/index.mjs)
-          GZIP=$(gzip -c dist/index.mjs | wc -c)
+          ESM=packages/shapeguard/dist/index.mjs
+          RAW=$(wc -c < $ESM)
+          GZIP=$(gzip -c $ESM | wc -c)
           GZIP_KB=$(echo "scale=1; $GZIP / 1024" | bc)
-          echo "Main ESM raw:       ${RAW} bytes ($(echo "scale=1; $RAW/1024" | bc) KB)"
-          echo "Main ESM gzipped:   ${GZIP} bytes (${GZIP_KB} KB)"
-          # Hard limit: 70 KB raw / 25 KB gzip
-          # Current baseline (v0.10.0): ~53 KB raw / ~18 KB gzip
-          # Headroom ~17 KB raw / ~7 KB gzip before alarm fires
+          echo "ESM raw: ${RAW}b  gzip: ${GZIP}b (${GZIP_KB}KB)"
           if [ "$RAW" -gt 71680 ]; then
-            echo "❌ Raw bundle regression: $(echo "scale=1; $RAW/1024" | bc)KB > 70KB"; exit 1
-          fi
+            echo "❌ Raw bundle >70KB: $(echo "scale=1; $RAW/1024" | bc)KB"; exit 1; fi
           if [ "$GZIP" -gt 25600 ]; then
-            echo "❌ Gzip bundle regression: ${GZIP_KB}KB > 25KB"; exit 1
-          fi
+            echo "❌ Gzip bundle >25KB: ${GZIP_KB}KB"; exit 1; fi
           echo "✅ Bundle OK: $(echo "scale=1; $RAW/1024" | bc)KB raw / ${GZIP_KB}KB gzipped"
 
-      - name: Bundle size summary (PRs only)
+      - name: Bundle sizes (PRs)
         if: matrix.node-version == '20.x' && github.event_name == 'pull_request'
         run: |
           echo "## 📦 Bundle sizes" >> $GITHUB_STEP_SUMMARY
           echo "| File | Size |" >> $GITHUB_STEP_SUMMARY
           echo "|------|------|" >> $GITHUB_STEP_SUMMARY
-          for f in dist/index.mjs dist/index.cjs dist/openapi/index.mjs dist/testing/index.mjs; do
+          for f in packages/shapeguard/dist/index.mjs \
+                   packages/shapeguard/dist/index.cjs \
+                   packages/shapeguard/dist/openapi/index.mjs \
+                   packages/shapeguard/dist/testing/index.mjs; do
             [ -f "$f" ] && KB=$(echo "scale=1; $(wc -c < $f) / 1024" | bc) && \
               echo "| \`$f\` | ${KB} KB |" >> $GITHUB_STEP_SUMMARY
           done
 
-      - name: CHANGELOG check (PRs only)
+      - name: CHANGELOG reminder (PRs)
         if: matrix.node-version == '20.x' && github.event_name == 'pull_request'
         run: |
-          if git diff --name-only origin/${{ github.base_ref }}...HEAD | grep -q "CHANGELOG.md"; then
-            echo "✅ CHANGELOG.md updated"
-          else
-            echo "⚠️  CHANGELOG.md not updated — add an entry under [Unreleased] if relevant."
-          fi
+          git diff --name-only origin/${{ github.base_ref }}...HEAD \
+            | grep -q "packages/shapeguard/CHANGELOG.md" \
+            && echo "✅ CHANGELOG.md updated" \
+            || echo "⚠️  CHANGELOG.md not updated — add entry under [Unreleased] if relevant."
 
-  # ── Security audit ────────────────────────────────────────────────────────────
+  examples:
+    name: Examples (Node 20)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    if: github.event.pull_request.draft != true
+    needs: lib
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20.x
+          cache: npm
+      - name: Install workspace dependencies
+        run: npm ci
+      - name: Build library (for workspace symlink resolution)
+        run: npm run build --workspace=packages/shapeguard
+      - name: Check all examples from root
+        run: node scripts/check-examples.mjs
+
   audit:
     name: Security audit
     runs-on: ubuntu-latest
     timeout-minutes: 5
-
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -130,52 +134,26 @@ jobs:
           node-version: 20.x
           cache: npm
       - run: npm ci
-      - name: Audit dependencies
-        run: npm audit --audit-level=critical
+      - run: npm audit --audit-level=critical --workspace=packages/shapeguard
 
-  # ── Website build verification ────────────────────────────────────────────────
-  # Ensures the Docusaurus site builds cleanly with the current docs.
-  # Only runs if website/ directory exists and has a package.json.
   website:
-    name: Build website
+    name: Website build
     runs-on: ubuntu-latest
     timeout-minutes: 10
     if: github.event.pull_request.draft != true
-
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-node@v4
         with:
           node-version: 20.x
           cache: npm
-
-      - name: Check if website exists
-        id: check_website
-        run: |
-          if [ -f "website/package.json" ]; then
-            echo "has_website=true" >> $GITHUB_OUTPUT
-          else
-            echo "has_website=false" >> $GITHUB_OUTPUT
-            echo "⚠️  No website/package.json found — skipping website build"
-          fi
-
-      - name: Install website dependencies
-        if: steps.check_website.outputs.has_website == 'true'
-        run: npm install
-        working-directory: website
-
-      - name: Build Docusaurus site
-        if: steps.check_website.outputs.has_website == 'true'
-        run: npm run build
-        working-directory: website
+      - run: npm ci
+      - name: Build Docusaurus
+        run: npm run build --workspace=website
         env:
           NODE_ENV: production
-
-      - name: Verify build output
-        if: steps.check_website.outputs.has_website == 'true'
+      - name: Verify output
         run: |
-          if [ ! -d "website/build" ]; then
-            echo "❌ website/build missing — Docusaurus build failed"; exit 1
-          fi
-          echo "✅ Website build: $(du -sh website/build | cut -f1)"
+          [ -d website/build ] \
+            && echo "✅ Website build: $(du -sh website/build | cut -f1)" \
+            || (echo "❌ website/build missing"; exit 1)

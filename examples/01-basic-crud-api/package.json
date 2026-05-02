@@ -1,0 +1,17 @@
+{
+  "name": "shapeguard-example-01-basic-crud-api",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Full CRUD API: shapeguard basics — validate, handle, createRouter, errorHandler",
+  "type": "module",
+  "scripts": {
+    "dev":   "tsx watch src/app.ts",
+    "start": "tsx src/app.ts",
+    "check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "express":    "^4.18.3",
+    "shapeguard": "*",
+    "zod":        "^3.22.4"
+  }
+}
