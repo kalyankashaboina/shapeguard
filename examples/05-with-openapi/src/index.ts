@@ -22,6 +22,7 @@ import {
   notFoundHandler, errorHandler,
 } from 'shapeguard'
 
+
 // ── Typed error factories (AppError.define) ────────────────────────────────────
 const EmailTakenError = AppError.define<{ email: string }>(
   'EMAIL_TAKEN', 409, 'Email address already registered'
@@ -140,10 +141,9 @@ const createUser = handle(CreateUserRoute, async (req, res) => {
 
 // Cursor pagination — stable under inserts/deletes (unlike offset pagination)
 const listUsers = handle(ListUsersRoute, async (req, res) => {
-  // Zod coerces and validates query at runtime — cast to resolved types
-  const cursor = req.query.cursor as string | undefined
-  const limit  = req.query.limit  as unknown as number
-  const search = req.query.search as string | undefined
+  // Zod validates + coerces query at runtime. Cast to schema's inferred type.
+  type ListQuery = { cursor?: string; limit: number; search?: string }
+  const { cursor, limit, search } = req.query as unknown as ListQuery
 
   let all = [...users.values()]
   if (search) all = all.filter(u => u.name.includes(search) || u.email.includes(search))
@@ -162,14 +162,15 @@ const listUsers = handle(ListUsersRoute, async (req, res) => {
 })
 
 const getUser = handle(GetUserRoute, async (req, res) => {
-  const user = users.get(req.params.id as string)
+  // GetUserRoute validates params.id as a UUID — it's always a string here
+  const user = users.get(req.params.id)
   if (!user) throw AppError.notFound('User')
   res.ok({ data: user, message: 'User found' })
 })
 
 const deleteUser = handle(DeleteUserRoute, async (req, res) => {
-  if (!users.has(req.params.id as string)) throw AppError.notFound('User')
-  users.delete(req.params.id as string)
+  if (!users.has(req.params.id)) throw AppError.notFound('User')
+  users.delete(req.params.id)
   res.noContent()
 })
 

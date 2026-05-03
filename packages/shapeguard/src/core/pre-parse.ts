@@ -19,7 +19,6 @@ export const DEFAULT_LIMITS: PreParseLimits = {
   maxStringLength: 10_000,
 }
 
-// ── Depth check (exported for unit tests) ────
 export function checkDepth(data: unknown, max: number, current = 0): void {
   if (current > max) {
     throw preParsError(ErrorCode.BODY_TOO_DEEP, `Object nesting exceeds maximum depth of ${max}`)
@@ -31,7 +30,6 @@ export function checkDepth(data: unknown, max: number, current = 0): void {
   }
 }
 
-// ── Array length check (exported for unit tests) ──
 export function checkArrayLengths(data: unknown, max: number): void {
   if (Array.isArray(data)) {
     if (data.length > max) {
@@ -43,7 +41,6 @@ export function checkArrayLengths(data: unknown, max: number): void {
   }
 }
 
-// ── String length check (exported for unit tests) ──
 export function checkStringLengths(data: unknown, max: number): void {
   if (typeof data === 'string') {
     if (data.length > max) {
@@ -56,7 +53,6 @@ export function checkStringLengths(data: unknown, max: number): void {
   }
 }
 
-// ── Unicode sanitize (exported for unit tests) ──
 // Single combined regex — one pass over the string instead of 8 chained replaces.
 const UNSAFE_CHARS = /[\u0000\u200B-\u200D\uFEFF\u202A\u202E\u0001-\u0008\u000B\u000C\u000E-\u001F\u007F]/g
 
@@ -104,10 +100,6 @@ export function safeJsonParse(raw: string): unknown {
   }
 }
 
-// ── Run all guards — single-pass for performance ──
-// Checks depth + array length + string length + sanitizes in one recursive walk.
-// Also skips dangerous keys (__proto__, constructor, prototype) when rebuilding objects
-// to prevent prototype pollution even if data arrives without going through safeJsonParse.
 export function runPreParse(data: unknown, limits: PreParseLimits = DEFAULT_LIMITS): unknown {
   return _pass(data, limits, 0)
 }
@@ -133,8 +125,7 @@ function _pass(data: unknown, limits: PreParseLimits, depth: number): unknown {
   if (data !== null && typeof data === 'object') {
     const out: Record<string, unknown> = {}
     for (const [k, v] of Object.entries(data as object)) {
-      if (BLOCKED_REBUILD.has(k)) continue  // skip __proto__ etc — prevents proto pollution
-      // Use defineProperty so assigning key '__proto__' never sets the prototype of out
+      if (BLOCKED_REBUILD.has(k)) continue
       Object.defineProperty(out, k, { value: _pass(v, limits, depth + 1), writable: true, enumerable: true, configurable: true })
     }
     return out

@@ -7,7 +7,6 @@
 import type { Request } from 'express'
 import { AppError } from '../errors/AppError.js'
 
-// ── Store types ───────────────────────────────
 type RateLimitEntry = { count: number; reset: number }
 export type SyncStore  = Map<string, RateLimitEntry>
 export type AsyncStore = {
@@ -22,12 +21,22 @@ export interface RateLimitOpts {
   inMemoryStore?: SyncStore
   store?:         AsyncStore
   keyGenerator?:  (req: Request) => string
+  /**
+   * Trust the X-Forwarded-For header for IP extraction.
+   * ONLY enable if your server is behind a trusted reverse proxy (nginx, AWS ALB, Cloudflare).
+   * When false (default), uses the direct socket address — safe even without a proxy.
+   * Attackers can spoof X-Forwarded-For to bypass IP-based limits when this is true without a proxy.
+   */
+  trustProxy?:    boolean
 }
 
 export async function checkRateLimit(req: Request, opts: RateLimitOpts): Promise<void> {
-  const ip  = (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim()
-           ?? req.socket?.remoteAddress
-           ?? 'unknown'
+  // Default: use socket address (safe). trustProxy:true opt-in reads X-Forwarded-For.
+  // This prevents attackers from spoofing the header to bypass rate limits.
+  const socketIp = req.socket?.remoteAddress ?? 'unknown'
+  const ip = opts.trustProxy
+    ? ((req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() ?? socketIp)
+    : socketIp
   const key = opts.keyGenerator ? opts.keyGenerator(req) : `${req.path}:${ip}`
   const now = Date.now()
 

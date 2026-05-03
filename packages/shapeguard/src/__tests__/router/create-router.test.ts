@@ -1,7 +1,7 @@
 // src/__tests__/router/create-router.test.ts
 import { describe, it, expect, vi } from 'vitest'
 import { createRouter } from '../../router/create-router.js'
-import type { Request, Response, NextFunction } from 'express'
+import type { Request } from 'express'
 
 function makeReq(method: string, path: string): Request {
   return { method, path } as unknown as Request

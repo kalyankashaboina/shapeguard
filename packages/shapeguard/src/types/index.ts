@@ -82,8 +82,6 @@ export interface PaginatedData<T> {
   pages: number
 }
 
-// Cursor-based pagination — for large datasets and infinite scroll
-// Offset pagination breaks when data changes between pages; cursors don't.
 export interface CursorPaginatedData<T> {
   items:      T[]
   nextCursor: string | null
@@ -292,6 +290,8 @@ export interface RouteDefinition extends RouteSchema {
     message?:      string
     store?:        { get(k: string): Promise<{ count: number; reset: number } | null>; set(k: string, v: { count: number; reset: number }): Promise<void> }
     keyGenerator?: (req: Request) => string
+    /** Trust X-Forwarded-For for IP. Only enable behind a trusted reverse proxy. Default: false */
+    trustProxy?:   boolean
   }
   cache?: { noStore: true; maxAge?: number; private?: boolean } | { maxAge: number; private?: boolean; noStore?: boolean; sMaxAge?: number; staleWhileRevalidate?: number }
   // OpenAPI metadata — optional, used by generateOpenAPI()
@@ -325,9 +325,9 @@ export const ErrorCode = {
   BODY_ARRAY_TOO_LARGE: 'BODY_ARRAY_TOO_LARGE',
   STRING_TOO_LONG:      'STRING_TOO_LONG',
   INVALID_CONTENT_TYPE: 'INVALID_CONTENT_TYPE',
-  INVALID_JSON:         'INVALID_JSON',          // BUG-L2 FIX: was used in pre-parse.ts but missing from enum
+  INVALID_JSON:         'INVALID_JSON',
   PARAM_POLLUTION:      'PARAM_POLLUTION',
-  PROTO_POLLUTION:      'PROTO_POLLUTION',        // BUG-L1 FIX: removed extra whitespace
+  PROTO_POLLUTION:      'PROTO_POLLUTION',
   RATE_LIMIT_EXCEEDED:  'RATE_LIMIT_EXCEEDED',
   REQUEST_TIMEOUT:      'REQUEST_TIMEOUT',
 } as const

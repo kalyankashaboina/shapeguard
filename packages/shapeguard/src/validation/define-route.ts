@@ -5,7 +5,7 @@
 // For Joi/Yup, pass the adapter directly.
 // ─────────────────────────────────────────────
 
-import type { RouteSchema, RouteDefinition, SchemaAdapter, ZodLike } from '../types/index.js'
+import type { RouteDefinition, SchemaAdapter, ZodLike } from '../types/index.js'
 import { zodAdapter, isZodSchema }                   from '../adapters/zod.js'
 
 type SchemaInput = SchemaAdapter | ZodLike
@@ -54,6 +54,8 @@ export interface DefineRouteInput {
     }
     // Customise the key — default is IP+path, override for user-based limiting
     keyGenerator?: (req: import('express').Request) => string
+    /** Trust X-Forwarded-For for IP. Only enable behind a trusted reverse proxy. Default: false */
+    trustProxy?:   boolean
   }
 
   /**
@@ -81,18 +83,6 @@ export interface DefineRouteInput {
 
 // RouteDefinition is defined in types/index.ts and re-exported here for backwards compatibility
 export type { RouteDefinition } from '../types/index.js'
-// @deprecated local definition kept for reference only — do not use directly
-interface _RouteDefinitionLocal extends RouteSchema {
-  transform?: (data: unknown) => Promise<unknown> | unknown
-  rateLimit?: {
-    windowMs:      number
-    max:           number
-    message?:      string
-    store?:        { get(k: string): Promise<{ count: number; reset: number } | null>; set(k: string, v: { count: number; reset: number }): Promise<void> }
-    keyGenerator?: (req: import('express').Request) => string
-  }
-  cache?:     { noStore: true; maxAge?: number; private?: boolean } | { maxAge: number; private?: boolean; noStore?: boolean; sMaxAge?: number; staleWhileRevalidate?: number }
-}
 
 export function defineRoute(input: DefineRouteInput): RouteDefinition {
   const schema: RouteDefinition = {}

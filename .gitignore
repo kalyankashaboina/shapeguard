@@ -1,7 +1,6 @@
 node_modules/
-website/node_modules/dist/
 dist/
-coverage/coverage/
+coverage/
 .env
 *.local
 .DS_Store
