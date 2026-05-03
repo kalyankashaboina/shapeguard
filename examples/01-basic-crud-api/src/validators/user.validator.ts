@@ -55,10 +55,11 @@ export const CreateUserRoute = defineRoute({
   response:  UserResponseSchema,
   // transform: runs AFTER validation, BEFORE the handler
   // Service receives already-hashed password — stays pure
-  transform: async (data: any) => {
-    // Simulated hash (replace with: const hash = await bcrypt.hash(data.password, 10))
-    const hash = `bcrypt_hashed:${data.password}`
-    return { ...data, password: hash }
+  transform: async (data: unknown) => {
+    const d = data as { email: string; name: string; password: string; role: string }
+    // Simulated hash (replace with: const hash = await bcrypt.hash(d.password, 10))
+    const hash = `bcrypt_hashed:${d.password}`
+    return { ...d, password: hash }
   },
 })
 
@@ -71,11 +72,12 @@ export const UpdateUserRoute = defineRoute({
   params:    UserParamsSchema,
   body:      UpdateUserDTO,
   response:  UserResponseSchema,
-  transform: async (data: any) => {
-    if (!data.password) return data
-    // Simulated hash (replace with: const hash = await bcrypt.hash(data.password, 10))
-    const hash = `bcrypt_hashed:${data.password}`
-    return { ...data, password: hash }
+  transform: async (data: unknown) => {
+    const d = data as { name?: string; role?: string; password?: string }
+    if (!d.password) return d
+    // Simulated hash (replace with: const hash = await bcrypt.hash(d.password, 10))
+    const hash = `bcrypt_hashed:${d.password}`
+    return { ...d, password: hash }
   },
 })
 

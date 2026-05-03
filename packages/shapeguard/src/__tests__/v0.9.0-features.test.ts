@@ -12,8 +12,7 @@
 //   • yupAdapter allErrors fix
 // ═══════════════════════════════════════════════════════════════════════════
 
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { z } from 'zod'
+import { describe, it, expect, vi, afterEach } from 'vitest'
 
 import {
   logger,
@@ -151,7 +150,7 @@ describe('Logger singleton', () => {
   it('getOrCreateLogger respects existing configureLogger call', () => {
     const calls: string[] = []
     const custom = {
-      info:  (_o: object, m?: string) => { calls.push('info') },
+      info:  (_o: object, _m?: string) => { calls.push('info') },
       warn:  (_o: object, _m?: string) => {},
       error: (_o: object, _m?: string) => {},
       debug: (_o: object, _m?: string) => {},

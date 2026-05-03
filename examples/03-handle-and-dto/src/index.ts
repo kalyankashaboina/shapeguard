@@ -50,6 +50,7 @@ import {
   errorHandler,
 } from 'shapeguard'
 
+
 // ── 1. Define DTOs — no manual z.infer needed ─────────────────────────────────
 const CreatePostDTO = createDTO(z.object({
   title:    z.string().min(1).max(200),
@@ -101,10 +102,11 @@ const createPost = handle(CreatePostRoute, async (req, res) => {
 })
 
 const listPosts = handle(ListPostsRoute, async (req, res) => {
-  const all   = [...posts.values()]
-  // Zod coerces query strings to numbers at runtime; cast to satisfy TypeScript
-  const page  = req.query.page  as unknown as number
-  const limit = req.query.limit as unknown as number
+  const all = [...posts.values()]
+  // Zod coerces query strings to numbers at runtime via z.coerce.number().
+  // Cast req.query to the schema's inferred type for correct arithmetic.
+  type ListQuery = { page: number; limit: number }
+  const { page, limit } = req.query as unknown as ListQuery
   const start = (page - 1) * limit
   res.paginated({
     data:  all.slice(start, start + limit),
@@ -115,13 +117,13 @@ const listPosts = handle(ListPostsRoute, async (req, res) => {
 })
 
 const getPost = handle(GetPostRoute, async (req, res) => {
-  const post = posts.get(req.params.id as string)
+  const post = posts.get(req.params.id)
   if (!post) throw AppError.notFound('Post')
   res.ok({ data: post, message: 'Post found' })
 })
 
 const updatePost = handle(UpdatePostRoute, async (req, res) => {
-  const post = posts.get(req.params.id as string)
+  const post = posts.get(req.params.id)
   if (!post) throw AppError.notFound('Post')
   const updated = { ...post, ...req.body }
   posts.set(post.id, updated)

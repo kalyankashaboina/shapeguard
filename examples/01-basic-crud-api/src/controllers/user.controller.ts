@@ -5,6 +5,7 @@
 // ─────────────────────────────────────────────
 
 import { handle, AppError } from 'shapeguard'
+
 import {
   CreateUserRoute,
   GetUserRoute,
@@ -12,6 +13,7 @@ import {
   DeleteUserRoute,
   ListUsersRoute,
 } from '../validators/user.validator.js'
+import type { UserQuery } from '../validators/user.validator.js'
 import { UserService } from '../services/user.service.js'
 
 export const UserController = {
@@ -31,7 +33,8 @@ export const UserController = {
 
   // GET /api/users
   listUsers: handle(ListUsersRoute, async (req, res) => {
-    const query = req.query as unknown as import('../validators/user.validator.js').UserQuery
+    // ListUsersRoute validates + coerces query at runtime — cast to the Zod-inferred type
+    const query = req.query as unknown as UserQuery
     const { users, total } = await UserService.list(query)
     res.paginated({ data: users, total, page: query.page, limit: query.limit })
   }),

@@ -13,21 +13,7 @@ import { asyncHandler } from '../errors/not-found.js'
 // We accept void too (for sync handlers) and cast at the call site.
 type AsyncRouteHandler = (req: Request, res: Response, next: NextFunction) => Promise<void> | void
 
-/**
- * Combines validate() + asyncHandler() into a single call.
- *
- * Before (v0.1.x):
- *   export const createUser = [
- *     validate(CreateUserRoute),
- *     asyncHandler(async (req, res) => { ... })
- *   ]
- *
- * After (v0.2.0):
- *   export const createUser = handle(CreateUserRoute, async (req, res) => { ... })
- *
- * Spread into router exactly the same way:
- *   router.post('/', ...createUser)
- */
+
 export function handle(
   schema:  RouteSchema | ValidateOptions,
   handler: AsyncRouteHandler,

@@ -8,7 +8,7 @@
 //   - AppError.define: typed factory
 // ═══════════════════════════════════════════════════════════════════════════
 
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import express from 'express'
 import supertest from 'supertest'
 import { createHmac } from 'crypto'
@@ -18,7 +18,7 @@ import { shapeguard }                     from '../shapeguard.js'
 import { errorHandler }                   from '../errors/error-handler.js'
 import { AppError }                       from '../errors/AppError.js'
 import { defineRoute }                    from '../validation/define-route.js'
-import { handle }                         from '../validation/handle.js'
+
 import { zodAdapter }                     from '../adapters/zod.js'
 import { generateOpenAPI, createDocs }    from '../openapi/index.js'
 import { verifyWebhook }                  from '../security/webhook.js'
@@ -33,11 +33,11 @@ function makeApp() {
   return app
 }
 
-function makeReq(overrides: Partial<Request> = {}): Request {
+function _makeReq(overrides: Partial<Request> = {}): Request {
   return { id: 'req_test', method: 'GET', path: '/test', route: { path: '/test' }, ...overrides } as unknown as Request
 }
 
-function makeRes(): Response & { statusCode: number; body: unknown } {
+function _makeRes(): Response & { statusCode: number; body: unknown } {
   let statusCode = 200
   let body: unknown = null
   return {
@@ -289,7 +289,7 @@ describe('generateOpenAPI — extended Zod type mapping', () => {
   it('z.literal produces const + enum', () => {
     const schema = zodAdapter(z.object({ status: z.literal('active') }))
     const spec = generateOpenAPI({ title: 'T', version: '1', routes: { 'GET /t': defineRoute({ body: schema }) } })
-    const props = (spec.paths['/t']!['get']!.requestBody?.content['application/json']?.schema as any)?.properties
+    const _props = (spec.paths['/t']!['get']!.requestBody?.content['application/json']?.schema as any)?.properties
     // GET routes have no body, use a POST instead
     const spec2 = generateOpenAPI({ title: 'T', version: '1', routes: { 'POST /t': defineRoute({ body: schema }) } })
     const props2 = (spec2.paths['/t']!['post']!.requestBody!.content['application/json']!.schema as any).properties

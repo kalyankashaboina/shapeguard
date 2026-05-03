@@ -7,32 +7,30 @@
     "website"
   ],
   "scripts": {
-    "build":        "npm run build        --workspace=packages/shapeguard",
-    "test":         "npm run test         --workspace=packages/shapeguard",
+    "build": "npm run build        --workspace=packages/shapeguard",
+    "test": "npm run test         --workspace=packages/shapeguard",
     "test:coverage": "npm run test:coverage --workspace=packages/shapeguard",
-    "typecheck":    "npm run typecheck    --workspace=packages/shapeguard",
-    "lint":         "npm run lint         --workspace=packages/shapeguard",
-    "validate":     "npm run validate     --workspace=packages/shapeguard",
-    "size":         "npm run size         --workspace=packages/shapeguard",
-
+    "typecheck": "npm run typecheck    --workspace=packages/shapeguard",
+    "lint": "npm run lint         --workspace=packages/shapeguard",
+    "validate": "npm run validate     --workspace=packages/shapeguard",
+    "size": "npm run size         --workspace=packages/shapeguard",
     "examples:typecheck": "npm run typecheck --workspaces --if-present",
-    "examples:test":      "npm run test      --workspaces --if-present",
-    "examples:check":     "npm run check     --workspaces --if-present",
-
-    "website:dev":   "npm run start --workspace=website",
+    "examples:test": "npm run test      --workspaces --if-present",
+    "examples:check": "npm run check     --workspaces --if-present",
+    "website:dev": "npm run start --workspace=website",
     "website:build": "npm run build --workspace=website",
-
-    "ci:lib":      "npm run typecheck && npm run lint && npm run test && npm run build",
+    "ci:lib": "npm run typecheck && npm run lint && npm run test && npm run build",
     "ci:examples": "npm run examples:check",
-    "ci:all":      "npm run ci:lib && npm run ci:examples",
-
-    "check-all": "node scripts/check-examples.mjs"
+    "ci:all": "npm run ci:lib && npm run ci:examples",
+    "check-all": "node scripts/check-examples.mjs",
+    "prepare": "npm run build --workspace=packages/shapeguard",
+    "setup": "npm install && npm run build --workspace=packages/shapeguard"
   },
   "devDependencies": {
-    "typescript":      "^5.4.0",
-    "tsx":             "^4.0.0",
-    "@types/node":     "^20.0.0",
-    "@types/express":  "^4.17.21"
+    "typescript": "^5.4.0",
+    "tsx": "^4.0.0",
+    "@types/node": "^20.0.0",
+    "@types/express": "^4.17.21"
   },
   "engines": {
     "node": ">=18.0.0"

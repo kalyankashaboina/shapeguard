@@ -194,8 +194,8 @@ describe('BUG #5 — errorHandler auto-discovers shapeguard logger', () => {
     const customLogger = {
       info:  () => {},
       debug: () => {},
-      warn:  (...args: unknown[]) => { logged.push('warn') },
-      error: (...args: unknown[]) => { logged.push('error') },
+      warn:  (..._args: unknown[]) => { logged.push('warn') },
+      error: (..._args: unknown[]) => { logged.push('error') },
     }
     const app = express()
     app.use(express.json())
@@ -212,8 +212,8 @@ describe('BUG #5 — errorHandler auto-discovers shapeguard logger', () => {
     const autoErrorLogged: string[] = []
     const explicitLogger = {
       info: () => {}, debug: () => {},
-      warn:  (...args: unknown[]) => { explicitErrorLogged.push('warn') },
-      error: (...args: unknown[]) => { explicitErrorLogged.push('error') },
+      warn:  (..._args: unknown[]) => { explicitErrorLogged.push('warn') },
+      error: (..._args: unknown[]) => { explicitErrorLogged.push('error') },
     }
     // Track ONLY calls that come with an error code (from errorHandler, not request logger)
     const autoLogger = {

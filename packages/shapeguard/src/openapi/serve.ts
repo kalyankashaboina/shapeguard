@@ -27,19 +27,7 @@ import { randomBytes } from 'crypto'
 
 // ── Shared helpers ────────────────────────────────────────────────────────────
 
-function esc(s: string): string {
-  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')
-}
-
-/**
- * Safely serialize an object for embedding inside an HTML <script> tag.
- * JSON.stringify does NOT escape </ sequences by default — a spec with title
- * "API</script><script>alert(1)</script>" would break or XSS-inject the page.
- * This function escapes all </ to <\/ to prevent script tag injection.
- */
-function safeJson(o: unknown): string {
-  return JSON.stringify(o).replace(/<\//g, '<\\/')
-}
+import { esc, safeJson } from './utils.js'
 
 function htmlHandler(html: string): RequestHandler {
   return (_req: Request, res: Response) => {

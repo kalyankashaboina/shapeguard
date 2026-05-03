@@ -1,13 +1,7 @@
-// ─────────────────────────────────────────────
-// errors/AppError.ts — shapeguard
-// Single error class. Throw anywhere. errorHandler catches everything.
-// ─────────────────────────────────────────────
-
 import type { ValidationIssue } from '../types/index.js'
-import { ErrorCode } from '../types/index.js'
+import { ErrorCode }            from '../types/index.js'
 
-// HTTP status for pre-parse guard errors — they are client errors, never 500
-const PP: Record<string, number> = {
+const PRE_PARSE_HTTP_STATUS: Record<string, number> = {
   [ErrorCode.BODY_TOO_DEEP]:        400,
   [ErrorCode.BODY_ARRAY_TOO_LARGE]: 400,
   [ErrorCode.STRING_TOO_LONG]:      400,
@@ -54,8 +48,6 @@ export class AppError extends Error {
     return new AppError(ErrorCode.CONFLICT, resource ? `${resource} already exists` : 'Resource already exists', 409)
   }
   static validation(details: ValidationIssue | ValidationIssue[]): AppError {
-    // Store the full array when multiple issues are provided (allErrors:true),
-    // or the single issue when only one is given.
     const stored = Array.isArray(details) && details.length === 1 ? details[0]! : details
     return new AppError(ErrorCode.VALIDATION_ERROR, 'Validation failed', 422, stored)
   }
@@ -69,7 +61,9 @@ export class AppError extends Error {
     if (isAppError(err)) return err
     if (err instanceof Error) {
       const p = err as Error & { code?: string; isPreParse?: boolean }
-      if (p.isPreParse && p.code) return new AppError(p.code, err.message, PP[p.code] ?? 400, null, true)
+      if (p.isPreParse && p.code) {
+        return new AppError(p.code, err.message, PRE_PARSE_HTTP_STATUS[p.code] ?? 400, null, true)
+      }
       return new AppError(ErrorCode.INTERNAL_ERROR, err.message, 500, null, false)
     }
     return new AppError(ErrorCode.INTERNAL_ERROR, 'An unexpected error occurred', 500, null, false)
@@ -78,17 +72,6 @@ export class AppError extends Error {
     return new AppError(opts.code, opts.message, opts.statusCode, opts.details ?? null)
   }
 
-  // ── Typed error factory ─────────────────────────────────────────────────────
-  // Define a reusable, typed error constructor once. Throw it anywhere with full
-  // TypeScript safety on the details payload — no more Record<string, unknown> guessing.
-  //
-  // Usage:
-  //   const RateLimitError = AppError.define('RATE_LIMIT_EXCEEDED', 429)
-  //   throw RateLimitError({ retryAfter: 30, limit: 100 })
-  //
-  //   const PaymentError = AppError.define<{ amount: number; currency: string }>('PAYMENT_FAILED', 402)
-  //   throw PaymentError({ amount: 9.99, currency: 'USD' })
-  //
   static define<TDetails extends Record<string, unknown> = Record<string, unknown>>(
     code:     string,
     status:   number,

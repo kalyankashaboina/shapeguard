@@ -2,7 +2,13 @@
   "extends": "./tsconfig.base.json",
   "compilerOptions": {
     "noUncheckedIndexedAccess": false,
-    "noImplicitOverride": false,
-    "types": ["node"]
+    "noImplicitOverride":       false,
+    "moduleResolution":         "bundler",
+    "types":                    ["node"],
+    "paths": {
+      "shapeguard":            ["./packages/shapeguard/src/index.ts"],
+      "shapeguard/*":          ["./packages/shapeguard/src/*.ts"]
+    },
+    "baseUrl": "."
   }
 }

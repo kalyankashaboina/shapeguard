@@ -59,13 +59,14 @@ const RegisterRoute = defineRoute({
   response:  UserResponseSchema,
 
   // transform: runs after validation, before handler
-  transform: async (data: any) => {
+  transform: async (data: unknown) => {
+    const d = data as { email: string; name: string; password: string }
     // Simulate bcrypt.hash (using a simple prefix for this example)
     // In real code: const hash = await bcrypt.hash(data.password, 10)
-    const hash = `bcrypt_hashed:${data.password}`
+    const hash = `bcrypt_hashed:${d.password}`
     return {
-      ...data,
-      email:    data.email.toLowerCase().trim(),  // normalise email too
+      ...d,
+      email:    d.email.toLowerCase().trim(),  // normalise email too
       password: hash,
     }
   },
@@ -105,15 +106,18 @@ const CreateArticleRoute = defineRoute({
   body:      ArticleDTO,
   response:  ArticleResponseSchema,
 
-  transform: async (data: any) => ({
-    ...data,
-    // Auto-generate slug: "Hello World!" → "hello-world"
-    slug: data.title
-      .toLowerCase()
-      .trim()
-      .replace(/[^\w\s-]/g, '')
-      .replace(/\s+/g, '-'),
-  }),
+  transform: async (data: unknown) => {
+    const d = data as { title: string; content: string }
+    return {
+      ...d,
+      // Auto-generate slug: "Hello World!" → "hello-world"
+      slug: d.title
+        .toLowerCase()
+        .trim()
+        .replace(/[^\w\s-]/g, '')
+        .replace(/\s+/g, '-'),
+    }
+  },
 })
 
 const createArticle = handle(CreateArticleRoute, async (req, res) => {
@@ -121,7 +125,7 @@ const createArticle = handle(CreateArticleRoute, async (req, res) => {
   const article = {
     id:        crypto.randomUUID(),
     title:     req.body.title,
-    slug:      (req.body as any).slug,
+    slug:      (req.body as unknown as { slug: string }).slug,
     content:   req.body.content,
     createdAt: new Date().toISOString(),
   }
